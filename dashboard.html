@@ -1327,7 +1327,10 @@ function EditableText({ value, tag = "span", className = "", style = {}, multili
       suppressContentEditableWarning={true}
       onFocus={() => setActive(true)}
       onBlur={commit}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
+        e.stopPropagation();
         if (!multiline && e.key === "Enter") { e.preventDefault(); ref.current.blur(); }
         if (e.key === "Escape") { ref.current.innerText = val; ref.current.blur(); }
       }}
@@ -1829,6 +1832,7 @@ function AuthGate() {
 
   /* ready */
   return React.createElement(App, {
+    user: state.user,
     isAdmin: state.isAdmin,
     displayName: state.displayName,
     userClient: state.client,
@@ -1852,11 +1856,11 @@ function ScreenOverview() {
       <div className="hero-panel">
         <div>
           <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-            <span className="tag accent">Copilote IA</span>
-            <span className="small muted">Résumé quotidien — 24 avr. 2026</span>
+            <EditableText value="Copilote IA" tag="span" className="tag accent"/>
+            <EditableText value="Résumé quotidien — 24 avr. 2026" tag="span" className="small muted"/>
           </div>
-          <div className="hp-title">3 signaux forts aujourd'hui. Ton CA a dépassé l'objectif mensuel de +5.2%.</div>
-          <div className="hp-sub">Le canal Meta Ads performe +38% vs la moyenne. 2 devis à relancer avant 18h. Thomas a 4 RDV à confirmer.</div>
+          <EditableText tag="div" className="hp-title" multiline value="3 signaux forts aujourd'hui. Ton CA a dépassé l'objectif mensuel de +5.2%."/>
+          <EditableText tag="div" className="hp-sub" multiline value="Le canal Meta Ads performe +38% vs la moyenne. 2 devis à relancer avant 18h. Thomas a 4 RDV à confirmer."/>
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button className="btn"><Icon name="eye" size={14}/> Voir détails</button>
@@ -1880,11 +1884,11 @@ function ScreenOverview() {
         {KPIS.map((k, i) => (
           <div key={i} className="kpi">
             <div className="kpi-label">
-              <span>{k.label}</span>
+              <EditableText value={k.label} tag="span"/>
               <span className={"trend " + k.dir}>{k.trend}</span>
             </div>
             <div className="kpi-value">
-              <span className="mono">{k.value}</span>
+              <EditableText value={k.value} tag="span" className="mono"/>
               {k.unit && <span className="unit">{k.unit}</span>}
             </div>
             <div className="spark"><Sparkline data={k.spark} /></div>
@@ -1896,13 +1900,13 @@ function ScreenOverview() {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-title">Évolution du chiffre d'affaires</div>
-              <div className="card-sub">CA réalisé vs objectif · budget publicitaire</div>
+              <EditableText value="Évolution du chiffre d'affaires" tag="div" className="card-title"/>
+              <EditableText value="CA réalisé vs objectif · budget publicitaire" tag="div" className="card-sub"/>
             </div>
             <div className="chart-legend">
-              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> CA</span>
-              <span className="lg" style={{ color: "var(--accent-2)" }}><span className="sw"/> Budget</span>
-              <span className="lg" style={{ color: "var(--text-3)" }}><span className="sw" style={{opacity: 0.5}}/> Objectif</span>
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> <EditableText value="CA" tag="span"/></span>
+              <span className="lg" style={{ color: "var(--accent-2)" }}><span className="sw"/> <EditableText value="Budget" tag="span"/></span>
+              <span className="lg" style={{ color: "var(--text-3)" }}><span className="sw" style={{opacity: 0.5}}/> <EditableText value="Objectif" tag="span"/></span>
             </div>
           </div>
           <div className="card-body" style={{ paddingTop: 8 }}>
@@ -1922,8 +1926,8 @@ function ScreenOverview() {
 
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Résumé IA</div>
-            <span className="tag accent"><Icon name="sparkles" size={10}/> Live</span>
+            <EditableText value="Résumé IA" tag="div" className="card-title"/>
+            <span className="tag accent"><Icon name="sparkles" size={10}/> <EditableText value="Live" tag="span"/></span>
           </div>
           <div className="card-body stack-md">
             {[
@@ -1941,8 +1945,8 @@ function ScreenOverview() {
                   <Icon name={s.icon} size={15}/>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{s.title}</div>
-                  <div className="small muted">{s.body}</div>
+                  <EditableText value={s.title} tag="div" style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}/>
+                  <EditableText value={s.body} tag="div" className="small muted" multiline/>
                 </div>
               </div>
             ))}
@@ -1954,11 +1958,11 @@ function ScreenOverview() {
         {KPIS_B.map((k, i) => (
           <div key={i} className="kpi">
             <div className="kpi-label">
-              <span>{k.label}</span>
+              <EditableText value={k.label} tag="span"/>
               <span className={"trend " + k.dir}>{k.trend}</span>
             </div>
             <div className="kpi-value">
-              <span className="mono">{k.value}</span>
+              <EditableText value={k.value} tag="span" className="mono"/>
               {k.unit && <span className="unit">{k.unit}</span>}
             </div>
           </div>
@@ -1968,11 +1972,11 @@ function ScreenOverview() {
       <div className="grid g-2">
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Leads par mois</div>
+            <EditableText value="Leads par mois" tag="div" className="card-title"/>
             <div className="chart-legend">
-              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> Ads</span>
-              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> Organique</span>
-              <span className="lg" style={{ color: "var(--info)" }}><span className="sw"/> Referral</span>
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> <EditableText value="Ads" tag="span"/></span>
+              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> <EditableText value="Organique" tag="span"/></span>
+              <span className="lg" style={{ color: "var(--info)" }}><span className="sw"/> <EditableText value="Referral" tag="span"/></span>
             </div>
           </div>
           <div className="card-body">
@@ -1989,10 +1993,10 @@ function ScreenOverview() {
 
         <div className="card">
           <div className="card-head">
-            <div className="card-title">ROAS & CPL</div>
+            <EditableText value="ROAS & CPL" tag="div" className="card-title"/>
             <div className="chart-legend">
-              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> ROAS</span>
-              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> CPL (€)</span>
+              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> <EditableText value="ROAS" tag="span"/></span>
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> <EditableText value="CPL (€)" tag="span"/></span>
             </div>
           </div>
           <div className="card-body">
@@ -2012,18 +2016,18 @@ function ScreenOverview() {
       <div className="grid g-2-1">
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Activité temps réel</div>
-            <span className="pill live"><span className="dot"/> Live</span>
+            <EditableText value="Activité temps réel" tag="div" className="card-title"/>
+            <span className="pill live"><span className="dot"/> <EditableText value="Live" tag="span"/></span>
           </div>
           <div className="card-body" style={{ paddingTop: 4 }}>
             {ACTIVITY.map((a, i) => (
               <div key={i} className="act-row">
                 <div className="act-dot" style={{ background: a.tag === "IA" ? "var(--accent)" : "var(--info)" }}/>
                 <div>
-                  <div style={{ fontSize: 12.5, color: "var(--text)" }}>{a.what}</div>
+                  <EditableText value={a.what} tag="div" style={{ fontSize: 12.5, color: "var(--text)" }}/>
                   <div className="small muted" style={{ marginTop: 2 }}>
-                    <span className="tag" style={{ fontSize: 10, padding: "1px 6px" }}>{a.tag}</span>
-                    <span style={{ marginLeft: 6 }}>{a.who}</span>
+                    <EditableText value={a.tag} tag="span" className="tag" style={{ fontSize: 10, padding: "1px 6px" }}/>
+                    <EditableText value={a.who} tag="span" style={{ marginLeft: 6 }}/>
                   </div>
                 </div>
                 <div className="act-time">{a.time}</div>
@@ -2034,8 +2038,8 @@ function ScreenOverview() {
 
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Répartition des leads</div>
-            <div className="card-sub">Mar 2026</div>
+            <EditableText value="Répartition des leads" tag="div" className="card-title"/>
+            <EditableText value="Mar 2026" tag="div" className="card-sub"/>
           </div>
           <div className="card-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
             <div style={{ position: "relative" }}>
@@ -2046,7 +2050,7 @@ function ScreenOverview() {
                 alignItems: "center", justifyContent: "center"
               }}>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>6 632</div>
-                <div className="small muted">leads</div>
+                <EditableText value="leads" tag="div" className="small muted"/>
               </div>
             </div>
             <div className="stack-sm" style={{ width: "100%" }}>
@@ -2054,7 +2058,7 @@ function ScreenOverview() {
                 <div key={i} className="row between" style={{ fontSize: 12 }}>
                   <span className="row" style={{ gap: 8 }}>
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color }}/>
-                    {c.name}
+                    <EditableText value={c.name} tag="span"/>
                   </span>
                   <span className="mono muted">{c.value}%</span>
                 </div>
@@ -2082,14 +2086,14 @@ function ScreenAcquisition() {
       <div className="card">
         <div className="card-head">
           <div>
-            <div className="card-title">Volume de leads par canal</div>
-            <div className="card-sub">12 derniers mois · cumul mensuel</div>
+            <EditableText value="Volume de leads par canal" tag="div" className="card-title"/>
+            <EditableText value="12 derniers mois · cumul mensuel" tag="div" className="card-sub"/>
           </div>
           <div className="chart-legend">
-            <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> Meta Ads</span>
-            <span className="lg" style={{ color: "var(--accent-2)" }}><span className="sw"/> Google Ads</span>
-            <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> Organique</span>
-            <span className="lg" style={{ color: "var(--info)" }}><span className="sw"/> Referral</span>
+            <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> <EditableText value="Meta Ads" tag="span"/></span>
+            <span className="lg" style={{ color: "var(--accent-2)" }}><span className="sw"/> <EditableText value="Google Ads" tag="span"/></span>
+            <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> <EditableText value="Organique" tag="span"/></span>
+            <span className="lg" style={{ color: "var(--info)" }}><span className="sw"/> <EditableText value="Referral" tag="span"/></span>
           </div>
         </div>
         <div className="card-body">
@@ -2107,7 +2111,7 @@ function ScreenAcquisition() {
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">Performance par canal</div>
+          <EditableText value="Performance par canal" tag="div" className="card-title"/>
           <div className="chips">
             <button className="chip active">Leads <span className="count">6632</span></button>
             <button className="chip">Budget</button>
@@ -2119,13 +2123,13 @@ function ScreenAcquisition() {
           <table className="data">
             <thead>
               <tr>
-                <th>Canal</th>
-                <th>Leads</th>
-                <th style={{ width: "25%" }}>Part du mix</th>
-                <th>Dépense</th>
-                <th>CPL</th>
-                <th>Conv.</th>
-                <th>ROAS</th>
+                <EditableText value="Canal" tag="th"/>
+                <EditableText value="Leads" tag="th"/>
+                <EditableText value="Part du mix" tag="th" style={{ width: "25%" }}/>
+                <EditableText value="Dépense" tag="th"/>
+                <EditableText value="CPL" tag="th"/>
+                <EditableText value="Conv." tag="th"/>
+                <EditableText value="ROAS" tag="th"/>
                 <th></th>
               </tr>
             </thead>
@@ -2138,7 +2142,7 @@ function ScreenAcquisition() {
                     <td>
                       <span className="row" style={{ gap: 10 }}>
                         <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color }}/>
-                        <strong>{c.name}</strong>
+                        <EditableText value={c.name} tag="strong"/>
                       </span>
                     </td>
                     <td className="mono">{c.leads.toLocaleString("fr")}</td>
@@ -2166,7 +2170,7 @@ function ScreenAcquisition() {
       <div className="grid g-2">
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Campagnes actives</div>
+            <EditableText value="Campagnes actives" tag="div" className="card-title"/>
             <button className="btn"><Icon name="plus" size={14}/> Nouvelle</button>
           </div>
           <div className="card-body stack-md">
@@ -2178,7 +2182,7 @@ function ScreenAcquisition() {
             ].map((c, i) => (
               <div key={i} className="stack-sm">
                 <div className="row between">
-                  <strong style={{ fontSize: 13 }}>{c.name}</strong>
+                  <EditableText value={c.name} tag="strong" style={{ fontSize: 13 }}/>
                   <span className="mono small" style={{ color: c.roas > 5 ? "var(--success)" : "var(--text-2)" }}>
                     {c.roas}x ROAS
                   </span>
@@ -2197,8 +2201,8 @@ function ScreenAcquisition() {
 
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Entonnoir d'acquisition</div>
-            <span className="tag">12 derniers mois</span>
+            <EditableText value="Entonnoir d'acquisition" tag="div" className="card-title"/>
+            <EditableText value="12 derniers mois" tag="span" className="tag"/>
           </div>
           <div className="card-body stack-md">
             {[
@@ -2212,7 +2216,7 @@ function ScreenAcquisition() {
               const w = Math.max(8, (Math.log(s.value) / Math.log(arr[0].value)) * 100);
               return (
                 <div key={i} className="row" style={{ gap: 12 }}>
-                  <div style={{ width: 110, fontSize: 12.5 }}>{s.step}</div>
+                  <EditableText value={s.step} tag="div" style={{ width: 110, fontSize: 12.5 }}/>
                   <div style={{ flex: 1, height: 28, background: "var(--surface-2)", borderRadius: 6, overflow: "hidden", position: "relative" }}>
                     <div style={{
                       width: w + "%", height: "100%",
@@ -2383,8 +2387,8 @@ function ScreenSales() {
       <div className="card">
         <div className="card-head">
           <div>
-            <div className="card-title">Performance commerciale par canal</div>
-            <div className="card-sub">CA, deals, taux de conversion et cycle moyen — 12 derniers mois</div>
+            <EditableText value="Performance commerciale par canal" tag="div" className="card-title"/>
+            <EditableText value="CA, deals, taux de conversion et cycle moyen — 12 derniers mois" tag="div" className="card-sub"/>
           </div>
           <div className="chips">
             <button className="chip active">CA généré</button>
@@ -2395,13 +2399,13 @@ function ScreenSales() {
         <table className="data">
           <thead>
             <tr>
-              <th>Canal</th>
-              <th>Deals</th>
-              <th>CA généré</th>
-              <th style={{ width: "22%" }}>Part du CA</th>
-              <th>Ticket moyen</th>
-              <th>Win rate</th>
-              <th>Cycle</th>
+              <EditableText value="Canal" tag="th"/>
+              <EditableText value="Deals" tag="th"/>
+              <EditableText value="CA généré" tag="th"/>
+              <EditableText value="Part du CA" tag="th" style={{ width: "22%" }}/>
+              <EditableText value="Ticket moyen" tag="th"/>
+              <EditableText value="Win rate" tag="th"/>
+              <EditableText value="Cycle" tag="th"/>
             </tr>
           </thead>
           <tbody>
@@ -2412,7 +2416,7 @@ function ScreenSales() {
                   <td>
                     <span className="row" style={{ gap: 10 }}>
                       <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color }}/>
-                      <strong>{s.source}</strong>
+                      <EditableText value={s.source} tag="strong"/>
                     </span>
                   </td>
                   <td className="mono">{s.deals}</td>
@@ -2440,8 +2444,8 @@ function ScreenSales() {
       <div className="grid g-2">
         <div className="card">
           <div className="card-head">
-            <div className="card-title">CA mensuel</div>
-            <span className="tag success">+24.3% YoY</span>
+            <EditableText value="CA mensuel" tag="div" className="card-title"/>
+            <EditableText value="+24.3% YoY" tag="span" className="tag success"/>
           </div>
           <div className="card-body">
             <BarChart
@@ -2453,7 +2457,7 @@ function ScreenSales() {
         </div>
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Taux de conversion par étape</div>
+            <EditableText value="Taux de conversion par étape" tag="div" className="card-title"/>
           </div>
           <div className="card-body stack-md">
             {[
@@ -2464,7 +2468,7 @@ function ScreenSales() {
             ].map((s, i) => (
               <div key={i} className="stack-sm">
                 <div className="row between" style={{ fontSize: 12.5 }}>
-                  <span>{s.from}</span>
+                  <EditableText value={s.from} tag="span"/>
                   <span className="mono" style={{ fontWeight: 600 }}>{s.value}%</span>
                 </div>
                 <div className="progress">
@@ -2478,6 +2482,927 @@ function ScreenSales() {
     </div>
   );
 }
+
+/* ============ Admin · Clients ============ */
+function _AdminField({ label, hint, children }) {
+  return (
+    <div className="stack-xs">
+      <label className="small muted">{label}</label>
+      {children}
+      {hint && <div className="small muted" style={{ fontSize: 10.5, opacity: 0.75 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function _AdminSection({ title, children }) {
+  return (
+    <div className="stack-sm" style={{ paddingBottom: 16, borderBottom: "1px solid var(--border-soft)" }}>
+      <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 10.5, fontWeight: 600 }}>{title}</div>
+      <div className="stack-sm">{children}</div>
+    </div>
+  );
+}
+
+function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
+  const allClients = window.__HELPAI_CLIENTS_ROWS || [];
+  const allInvoices = window.__HELPAI_INV_ROWS || [];
+  const allLeads   = window.__HELPAI_LEADS_ROWS || [];
+
+  const [search, setSearch]         = React.useState("");
+  const [selectedId, setSelectedId] = React.useState(allClients[0] ? allClients[0].id : null);
+  const [draft, setDraft]           = React.useState(null);
+  const [saving, setSaving]         = React.useState(false);
+  const [feedback, setFeedback]     = React.useState(null);
+
+  const selected = allClients.find(c => c.id === selectedId) || null;
+
+  function buildDraft(c) {
+    return {
+      nom: c.nom || "",
+      slug: c.slug || "",
+      email: c.email || "",
+      telephone: c.telephone || "",
+      secteur: c.secteur || "",
+      statut: c.statut || "actif",
+      stripe_customer_id: c.stripe_customer_id || "",
+      gmb_client_id: c.gmb_client_id || "",
+      google_ads_id: c.google_ads_id || "",
+      meta_ads_id: c.meta_ads_id || "",
+      drive_folder_id: c.drive_folder_id || "",
+      telegram_notify: !!c.telegram_notify,
+      notes_internes: c.notes_internes || "",
+    };
+  }
+
+  React.useEffect(() => {
+    if (selected) { setDraft(buildDraft(selected)); setFeedback(null); }
+    else { setDraft(null); }
+  }, [selectedId, tick]);
+
+  const filtered = React.useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return allClients;
+    return allClients.filter(c =>
+      (c.nom || "").toLowerCase().includes(q) ||
+      (c.secteur || "").toLowerCase().includes(q)
+    );
+  }, [search, allClients, tick]);
+
+  function statsFor(c) {
+    const ca = allInvoices.filter(i => i.client_id === c.id).reduce((s, i) => s + (i.montant || 0), 0) / 100;
+    const leads = allLeads.filter(l => l.client_id === c.id).length;
+    return { ca, leads };
+  }
+
+  async function save() {
+    if (!selected || !draft) return;
+    if (!draft.nom.trim())   { setFeedback({ type: "error", msg: "Le nom est obligatoire." }); return; }
+    if (!draft.email.trim()) { setFeedback({ type: "error", msg: "L'email est obligatoire." }); return; }
+    if (!draft.statut)       { setFeedback({ type: "error", msg: "Le statut est obligatoire." }); return; }
+    setSaving(true);
+    setFeedback(null);
+    const payload = {
+      nom: draft.nom.trim(),
+      email: draft.email.trim(),
+      telephone: draft.telephone.trim() || null,
+      secteur: draft.secteur.trim() || null,
+      statut: draft.statut,
+      stripe_customer_id: draft.stripe_customer_id.trim() || null,
+      gmb_client_id: draft.gmb_client_id.trim() || null,
+      google_ads_id: draft.google_ads_id.trim() || null,
+      meta_ads_id: draft.meta_ads_id.trim() || null,
+      drive_folder_id: draft.drive_folder_id.trim() || null,
+      telegram_notify: !!draft.telegram_notify,
+      notes_internes: draft.notes_internes.trim() || null,
+    };
+    const { error } = await sb.from("agency_clients").update(payload).eq("id", selected.id);
+    setSaving(false);
+    if (error) {
+      setFeedback({ type: "error", msg: error.message || "Erreur lors de la sauvegarde" });
+      return;
+    }
+    setFeedback({ type: "ok", msg: "Modifications enregistrées" });
+    if (onRefresh) onRefresh();
+  }
+
+  const totalActifs = allClients.filter(c => c.statut === "actif").length;
+  const totalCa = allInvoices.reduce((s, i) => s + (i.montant || 0), 0) / 100;
+  const totalLeads = allLeads.length;
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <div className="kpi"><div className="kpi-label"><span>Clients</span></div><div className="kpi-value"><span className="mono">{allClients.length}</span></div></div>
+        <div className="kpi"><div className="kpi-label"><span>Actifs</span></div><div className="kpi-value"><span className="mono">{totalActifs}</span></div></div>
+        <div className="kpi"><div className="kpi-label"><span>CA cumulé</span></div><div className="kpi-value"><span className="mono">{totalCa.toLocaleString("fr-FR")}</span><span className="unit">€</span></div></div>
+        <div className="kpi"><div className="kpi-label"><span>Leads totaux</span></div><div className="kpi-value"><span className="mono">{totalLeads}</span></div></div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "320px 1fr", gap: 16 }}>
+        {/* List */}
+        <div className="card" style={{ maxHeight: 760, display: "flex", flexDirection: "column" }}>
+          <div className="card-head">
+            <div className="card-title">Portfolio</div>
+            <span className="tag">{filtered.length}</span>
+          </div>
+          <div style={{ padding: "0 14px 10px" }}>
+            <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                   placeholder="Rechercher un client…" value={search} onChange={e => setSearch(e.target.value)}/>
+          </div>
+          <div style={{ padding: "0 8px 12px", overflow: "auto", flex: 1 }}>
+            {filtered.length === 0 && <div className="muted small" style={{ padding: 16 }}>Aucun client</div>}
+            {filtered.map(c => {
+              const s = statsFor(c);
+              const active = c.id === selectedId;
+              const tagCls = c.statut === "actif" ? "success" : c.statut === "pause" ? "accent" : "danger";
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => setSelectedId(c.id)}
+                  style={{
+                    padding: 12, borderRadius: 10, marginBottom: 6, cursor: "pointer",
+                    background: active ? "var(--surface-2)" : "transparent",
+                    border: active ? "1px solid var(--accent-border)" : "1px solid transparent",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <div className="row between" style={{ marginBottom: 4 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nom || "—"}</div>
+                    <span className={"tag " + tagCls}>{c.statut || "—"}</span>
+                  </div>
+                  <div className="small muted" style={{ marginBottom: 6 }}>{c.secteur || "Sans secteur"}</div>
+                  <div className="row" style={{ gap: 12 }}>
+                    <span className="small muted">CA <strong className="mono" style={{ color: "var(--text-1)" }}>{s.ca.toLocaleString("fr-FR")} €</strong></span>
+                    <span className="small muted">Leads <strong className="mono" style={{ color: "var(--text-1)" }}>{s.leads}</strong></span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Edit panel */}
+        <div className="card">
+          {!selected && (
+            <div className="card-body muted" style={{ padding: 32, textAlign: "center" }}>
+              Sélectionnez un client à gauche pour l'éditer.
+            </div>
+          )}
+          {selected && draft && (
+            <React.Fragment>
+              <div className="card-head">
+                <div>
+                  <div className="card-title">{selected.nom || "—"}</div>
+                  <div className="card-sub mono" style={{ fontSize: 10.5 }}>{selected.id}</div>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn" onClick={() => onViewClient && onViewClient(selected.id)}>
+                    <Icon name="eye" size={13}/> Voir le dashboard
+                  </button>
+                </div>
+              </div>
+              <div className="card-body stack-md">
+
+                <_AdminSection title="Infos générales">
+                  <_AdminField label="Nom du client *">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           value={draft.nom} onChange={e => setDraft({ ...draft, nom: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Slug" hint="Identifiant URL — non modifiable.">
+                    <input className="search" style={{ minWidth: 0, width: "100%", color: "var(--text-3)", opacity: 0.7, cursor: "not-allowed" }}
+                           value={draft.slug} readOnly disabled/>
+                  </_AdminField>
+                  <_AdminField label="Email *">
+                    <input className="search" type="email" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           value={draft.email} onChange={e => setDraft({ ...draft, email: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Téléphone">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="+33 …"
+                           value={draft.telephone} onChange={e => setDraft({ ...draft, telephone: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Secteur">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           value={draft.secteur} onChange={e => setDraft({ ...draft, secteur: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Statut *">
+                    <select className="search" style={{ minWidth: 0, width: "100%", cursor: "pointer", color: "var(--text-1)" }}
+                            value={draft.statut} onChange={e => setDraft({ ...draft, statut: e.target.value })}>
+                      <option value="actif">Actif</option>
+                      <option value="pause">En pause</option>
+                      <option value="stoppe">Stoppé</option>
+                    </select>
+                  </_AdminField>
+                </_AdminSection>
+
+                <_AdminSection title="Connecteurs API · tracking automatique">
+                  <_AdminField label="Google Business Profile (GMB) — Location ID"
+                               hint="Pour synchroniser avis & insights via API GMB.">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="locations/1234567890"
+                           value={draft.gmb_client_id} onChange={e => setDraft({ ...draft, gmb_client_id: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Google Ads — Customer ID"
+                               hint="Format 123-456-7890 (sans tirets aussi accepté).">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="123-456-7890"
+                           value={draft.google_ads_id} onChange={e => setDraft({ ...draft, google_ads_id: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Meta Ads — Ad Account ID"
+                               hint="Format act_1234567890.">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="act_1234567890"
+                           value={draft.meta_ads_id} onChange={e => setDraft({ ...draft, meta_ads_id: e.target.value })}/>
+                  </_AdminField>
+                </_AdminSection>
+
+                <_AdminSection title="Facturation">
+                  <_AdminField label="Stripe — Customer ID"
+                               hint="Pour récupérer automatiquement les factures via l'API Stripe.">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="cus_XXXXXXXXXXXXXX"
+                           value={draft.stripe_customer_id} onChange={e => setDraft({ ...draft, stripe_customer_id: e.target.value })}/>
+                  </_AdminField>
+                </_AdminSection>
+
+                <_AdminSection title="Documents">
+                  <_AdminField label="Google Drive — Folder ID"
+                               hint="ID du dossier client (drive.google.com/drive/folders/<ID>).">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="1aBcDeFgHiJkLmNoPqRsTuVwXyZ"
+                           value={draft.drive_folder_id} onChange={e => setDraft({ ...draft, drive_folder_id: e.target.value })}/>
+                  </_AdminField>
+                </_AdminSection>
+
+                <_AdminSection title="Notifications">
+                  <label className="row" style={{ gap: 8, cursor: "pointer" }}>
+                    <input type="checkbox" checked={draft.telegram_notify}
+                           onChange={e => setDraft({ ...draft, telegram_notify: e.target.checked })}/>
+                    <span className="small">Notifications Telegram activées pour ce client</span>
+                  </label>
+                </_AdminSection>
+
+                <_AdminSection title="Notes internes">
+                  <_AdminField label="Notes (visibles uniquement par l'agence)">
+                    <textarea className="search" rows={4}
+                              style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)", height: "auto", padding: "10px 12px", lineHeight: 1.5, resize: "vertical", fontFamily: "inherit" }}
+                              value={draft.notes_internes}
+                              onChange={e => setDraft({ ...draft, notes_internes: e.target.value })}/>
+                  </_AdminField>
+                </_AdminSection>
+
+                {feedback && (
+                  <div className="small" style={{ color: feedback.type === "error" ? "var(--danger)" : "var(--success)" }}>
+                    {feedback.msg}
+                  </div>
+                )}
+
+                <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+                  <button className="btn" disabled={saving} onClick={() => setDraft(buildDraft(selected))}>Annuler</button>
+                  <button className="btn primary" disabled={saving} onClick={save}>
+                    {saving ? "Enregistrement…" : "Enregistrer"}
+                  </button>
+                </div>
+              </div>
+            </React.Fragment>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.ScreenClientsAdmin = ScreenClientsAdmin;
+
+/* ============ Mon compte ============ */
+function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
+  const [email, setEmail] = React.useState((user && user.email) || "");
+  const [phone, setPhone] = React.useState((userClient && userClient.telephone) || "");
+  const [pwd1, setPwd1]   = React.useState("");
+  const [pwd2, setPwd2]   = React.useState("");
+  const [msg, setMsg]     = React.useState(null);
+  const [docs, setDocs]   = React.useState([]);
+  const [docsLoading, setDocsLoading] = React.useState(false);
+  const [busy, setBusy] = React.useState({ email: false, phone: false, pwd: false });
+  const invoices = window.__HELPAI_INV_ROWS || [];
+
+  React.useEffect(() => {
+    if (!userClient) { setDocs([]); return; }
+    setDocsLoading(true);
+    sb.from("agency_documents")
+      .select("*")
+      .eq("client_id", userClient.id)
+      .eq("visible_client", true)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        setDocsLoading(false);
+        if (!error) setDocs(data || []);
+      });
+  }, [userClient && userClient.id]);
+
+  async function saveEmail(e) {
+    e.preventDefault();
+    setMsg(null);
+    setBusy(b => ({ ...b, email: true }));
+    const { error } = await sb.auth.updateUser({ email });
+    setBusy(b => ({ ...b, email: false }));
+    if (error) setMsg({ type: "error", msg: error.message });
+    else setMsg({ type: "ok", msg: "Un email de confirmation a été envoyé à la nouvelle adresse. Cliquez le lien pour valider." });
+  }
+
+  async function savePhone(e) {
+    e.preventDefault();
+    setMsg(null);
+    if (!userClient) { setMsg({ type: "error", msg: "Aucun espace client lié à ce compte." }); return; }
+    setBusy(b => ({ ...b, phone: true }));
+    const { error } = await sb.from("agency_clients").update({ telephone: phone.trim() || null }).eq("id", userClient.id);
+    setBusy(b => ({ ...b, phone: false }));
+    if (error) setMsg({ type: "error", msg: error.message });
+    else { setMsg({ type: "ok", msg: "Numéro mis à jour." }); if (onRefresh) onRefresh(); }
+  }
+
+  async function savePassword(e) {
+    e.preventDefault();
+    setMsg(null);
+    if (pwd1.length < 6) { setMsg({ type: "error", msg: "Mot de passe trop court (6 caractères minimum)." }); return; }
+    if (pwd1 !== pwd2)   { setMsg({ type: "error", msg: "Les deux mots de passe ne correspondent pas." }); return; }
+    setBusy(b => ({ ...b, pwd: true }));
+    const { error } = await sb.auth.updateUser({ password: pwd1 });
+    setBusy(b => ({ ...b, pwd: false }));
+    if (error) setMsg({ type: "error", msg: error.message });
+    else { setMsg({ type: "ok", msg: "Mot de passe modifié avec succès." }); setPwd1(""); setPwd2(""); }
+  }
+
+  function fmtMoney(cents, devise) {
+    const v = ((cents || 0) / 100).toLocaleString("fr-FR");
+    const dev = (devise || "").toLowerCase() === "eur" ? "€" : (devise || "").toUpperCase();
+    return v + " " + dev;
+  }
+
+  function statutTag(s) {
+    const k = (s || "").toLowerCase();
+    if (k === "paid" || k === "payée" || k === "payee") return "success";
+    if (k === "open" || k === "en attente" || k === "draft") return "accent";
+    if (k === "void" || k === "uncollectible" || k === "echoué" || k === "echec") return "danger";
+    return "";
+  }
+
+  return (
+    <div className="stack-lg fade-up">
+      {msg && (
+        <div className="card" style={{
+          padding: "12px 14px",
+          borderColor: msg.type === "error" ? "var(--danger)" : "var(--success)",
+          color:       msg.type === "error" ? "var(--danger)" : "var(--success)",
+        }}>
+          <div className="small">{msg.msg}</div>
+        </div>
+      )}
+
+      <div className="grid g-2">
+        {/* Email */}
+        <form className="card" onSubmit={saveEmail}>
+          <div className="card-head">
+            <div>
+              <div className="card-title">Email de connexion</div>
+              <div className="card-sub">Sert d'identifiant. Un email de confirmation sera envoyé.</div>
+            </div>
+          </div>
+          <div className="card-body stack-md">
+            <input className="search" type="email" required
+                   style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                   value={email} onChange={e => setEmail(e.target.value)}/>
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button className="btn primary" type="submit" disabled={busy.email}>
+                {busy.email ? "Envoi…" : "Mettre à jour l'email"}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {/* Phone (SMS) */}
+        {userClient && (
+          <form className="card" onSubmit={savePhone}>
+            <div className="card-head">
+              <div>
+                <div className="card-title">Téléphone (SMS)</div>
+                <div className="card-sub">Numéro où sont envoyées les notifications SMS.</div>
+              </div>
+            </div>
+            <div className="card-body stack-md">
+              <input className="search" type="tel" placeholder="+33 …"
+                     style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                     value={phone} onChange={e => setPhone(e.target.value)}/>
+              <div className="row" style={{ justifyContent: "flex-end" }}>
+                <button className="btn primary" type="submit" disabled={busy.phone}>
+                  {busy.phone ? "Enregistrement…" : "Mettre à jour"}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Password */}
+      <form className="card" onSubmit={savePassword}>
+        <div className="card-head">
+          <div>
+            <div className="card-title">Mot de passe</div>
+            <div className="card-sub">6 caractères minimum.</div>
+          </div>
+        </div>
+        <div className="card-body grid g-2">
+          <_AdminField label="Nouveau mot de passe">
+            <input className="search" type="password" autoComplete="new-password"
+                   style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                   value={pwd1} onChange={e => setPwd1(e.target.value)}/>
+          </_AdminField>
+          <_AdminField label="Confirmer">
+            <input className="search" type="password" autoComplete="new-password"
+                   style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                   value={pwd2} onChange={e => setPwd2(e.target.value)}/>
+          </_AdminField>
+          <div className="row" style={{ justifyContent: "flex-end", gridColumn: "1 / -1" }}>
+            <button className="btn primary" type="submit" disabled={busy.pwd}>
+              {busy.pwd ? "Modification…" : "Changer le mot de passe"}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {/* Documents */}
+      {userClient && (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="card-title">Mes documents</div>
+              <div className="card-sub">{docs.length} document{docs.length > 1 ? "s" : ""} partagé{docs.length > 1 ? "s" : ""} par l'agence.</div>
+            </div>
+          </div>
+          <div className="card-body">
+            {docsLoading && <div className="muted small">Chargement…</div>}
+            {!docsLoading && docs.length === 0 && <div className="muted small">Aucun document pour l'instant.</div>}
+            {!docsLoading && docs.length > 0 && (
+              <div className="stack-sm">
+                {docs.map(d => (
+                  <div key={d.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{d.nom}</div>
+                      <div className="small muted">
+                        {d.type}{d.taille_kb ? " · " + d.taille_kb + " KB" : ""} · {new Date(d.created_at).toLocaleDateString("fr-FR")}
+                      </div>
+                    </div>
+                    {d.drive_url ? (
+                      <a className="btn small" href={d.drive_url} target="_blank" rel="noopener noreferrer">
+                        <Icon name="external" size={12}/> Ouvrir
+                      </a>
+                    ) : <span className="small muted">Lien indisponible</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Invoices */}
+      {userClient && (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="card-title">Mes factures</div>
+              <div className="card-sub">{invoices.length} facture{invoices.length > 1 ? "s" : ""}.</div>
+            </div>
+          </div>
+          <div className="card-body">
+            {invoices.length === 0 && <div className="muted small">Aucune facture pour l'instant.</div>}
+            {invoices.length > 0 && (
+              <div className="stack-sm">
+                {invoices.map(inv => (
+                  <div key={inv.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10, gap: 12 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
+                        {inv.numero || inv.stripe_invoice_id || inv.id.slice(0,8)}
+                      </div>
+                      <div className="small muted">
+                        {inv.description || "—"} · {new Date(inv.created_at).toLocaleDateString("fr-FR")}
+                        {inv["payé_le"] ? " · Payée le " + new Date(inv["payé_le"]).toLocaleDateString("fr-FR") : ""}
+                      </div>
+                    </div>
+                    <div className="row" style={{ gap: 10, flexShrink: 0 }}>
+                      <span className="mono" style={{ fontWeight: 600 }}>{fmtMoney(inv.montant, inv.devise)}</span>
+                      <span className={"tag " + statutTag(inv.statut)}>{inv.statut}</span>
+                      {(inv.pdf_url || inv.invoice_url) && (
+                        <a className="btn small" href={inv.pdf_url || inv.invoice_url} target="_blank" rel="noopener noreferrer">
+                          <Icon name="download" size={12}/> PDF
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+window.ScreenAccount = ScreenAccount;
+
+/* ============ DataEditDrawer (admin global edit panel) ============ */
+const TABLE_SCHEMAS = {
+  agency_kpis: {
+    label: "KPIs",
+    icon: "overview",
+    orderBy: "periode",
+    orderDesc: true,
+    summary: r => (r.periode ? String(r.periode).slice(0,7) : "—") + " · " + (r.source || "—"),
+    fields: [
+      { key: "periode", label: "Période *", type: "date", required: true, hint: "1er du mois conseillé" },
+      { key: "source", label: "Source *", type: "select", required: true,
+        options: ["total","google_ads","meta","gmb","site","autre","appel","lsa"] },
+      { key: "nb_leads", label: "Nb leads", type: "int" },
+      { key: "nb_impressions", label: "Impressions", type: "int" },
+      { key: "nb_clics", label: "Clics", type: "int" },
+      { key: "depense", label: "Dépense (cts)", type: "int", hint: "En centimes" },
+      { key: "ca_genere", label: "CA généré (cts)", type: "int" },
+      { key: "ca_mensuel", label: "CA mensuel (cts)", type: "int" },
+      { key: "deals", label: "Deals", type: "int" },
+      { key: "deals_signes", label: "Deals signés", type: "int" },
+      { key: "cout_par_lead", label: "CPL (cts)", type: "int" },
+      { key: "cout_par_deal", label: "Coût par deal (cts)", type: "int" },
+      { key: "cout_deal", label: "Coût deal (cts)", type: "int" },
+      { key: "panier_moyen", label: "Panier moyen (cts)", type: "int" },
+      { key: "roas", label: "ROAS", type: "num" },
+      { key: "taux_conv", label: "Taux conv (%)", type: "num" },
+      { key: "taux_conversion", label: "Taux conversion (%)", type: "num" },
+      { key: "taux_rdv", label: "Taux RDV (%)", type: "num" },
+      { key: "no_show", label: "No-show (%)", type: "num" },
+      { key: "note_google", label: "Note Google", type: "num" },
+      { key: "nb_avis_google", label: "Avis Google", type: "int" },
+      { key: "pipeline", label: "Pipeline", type: "int" },
+      { key: "pipeline_devis", label: "Pipeline devis", type: "int" },
+      { key: "leads_orga", label: "Leads orga", type: "int" },
+      { key: "leads_ref", label: "Leads ref", type: "int" },
+    ],
+  },
+  agency_leads: {
+    label: "Leads",
+    icon: "customers",
+    orderBy: "created_at",
+    orderDesc: true,
+    summary: r => (r.nom || "Anonyme") + " · " + (r.statut || "—"),
+    fields: [
+      { key: "nom", label: "Nom", type: "text" },
+      { key: "email", label: "Email", type: "email" },
+      { key: "telephone", label: "Téléphone", type: "tel" },
+      { key: "source", label: "Source *", type: "select", required: true,
+        options: ["google_ads","meta","gmb","site","autre","appel","lsa"] },
+      { key: "statut", label: "Statut *", type: "select", required: true,
+        options: ["nouveau","contacté","qualifié","gagné","perdu"] },
+      { key: "message", label: "Message", type: "textarea" },
+      { key: "utm_source", label: "UTM source", type: "text" },
+      { key: "utm_medium", label: "UTM medium", type: "text" },
+      { key: "utm_campaign", label: "UTM campaign", type: "text" },
+      { key: "utm_content", label: "UTM content", type: "text" },
+      { key: "notes_internes", label: "Notes internes", type: "textarea" },
+      { key: "notes", label: "Notes", type: "textarea" },
+    ],
+  },
+  agency_invoices: {
+    label: "Factures",
+    icon: "sales",
+    orderBy: "created_at",
+    orderDesc: true,
+    summary: r => (r.numero || (r.id ? r.id.slice(0,8) : "—")) + " · " + (r.statut || "—"),
+    fields: [
+      { key: "numero", label: "Numéro", type: "text" },
+      { key: "description", label: "Description", type: "text" },
+      { key: "montant", label: "Montant (cts) *", type: "int", required: true, hint: "En centimes" },
+      { key: "devise", label: "Devise *", type: "text", required: true, hint: "ex: eur" },
+      { key: "statut", label: "Statut *", type: "select", required: true,
+        options: ["draft","open","paid","void","uncollectible"] },
+      { key: "invoice_url", label: "URL facture", type: "url" },
+      { key: "pdf_url", label: "URL PDF", type: "url" },
+      { key: "periode_debut", label: "Période début", type: "date" },
+      { key: "periode_fin", label: "Période fin", type: "date" },
+      { key: "payé_le", label: "Payée le", type: "date" },
+      { key: "stripe_invoice_id", label: "Stripe Invoice ID", type: "text" },
+      { key: "stripe_payment_intent_id", label: "Stripe PaymentIntent ID", type: "text" },
+    ],
+  },
+  agency_documents: {
+    label: "Documents",
+    icon: "integrations",
+    orderBy: "created_at",
+    orderDesc: true,
+    summary: r => (r.nom || "—") + " · " + (r.type || "—"),
+    fields: [
+      { key: "nom", label: "Nom *", type: "text", required: true },
+      { key: "type", label: "Type *", type: "text", required: true, hint: "ex: contrat, brief, kbis…" },
+      { key: "drive_url", label: "URL Drive", type: "url" },
+      { key: "drive_file_id", label: "Drive File ID", type: "text" },
+      { key: "taille_kb", label: "Taille (KB)", type: "int" },
+      { key: "visible_client", label: "Visible client", type: "bool" },
+    ],
+  },
+};
+
+function _RowForm({ schema, draft, setDraft, onSave, onCancel, busy, title }) {
+  const dateValue = (v) => (v ? String(v).slice(0,10) : "");
+  return (
+    <div className="card" style={{ padding: 14, borderColor: "var(--accent-border)" }}>
+      <div style={{ paddingBottom: 10, marginBottom: 10, borderBottom: "1px solid var(--border-soft)", fontWeight: 600, fontSize: 13 }}>{title}</div>
+      <div className="grid g-2" style={{ gap: 10 }}>
+        {schema.fields.map(f => {
+          const v = draft[f.key];
+          const set = (val) => setDraft({ ...draft, [f.key]: val });
+          if (f.type === "select") {
+            return (
+              <_AdminField key={f.key} label={f.label} hint={f.hint}>
+                <select className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "pointer" }} value={v == null ? "" : v} onChange={e => set(e.target.value)}>
+                  <option value="">—</option>
+                  {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </_AdminField>
+            );
+          }
+          if (f.type === "bool") {
+            return (
+              <_AdminField key={f.key} label={f.label} hint={f.hint}>
+                <label className="row" style={{ gap: 8, cursor: "pointer", padding: "6px 0" }}>
+                  <input type="checkbox" checked={!!v} onChange={e => set(e.target.checked)}/>
+                  <span className="small">{v ? "Oui" : "Non"}</span>
+                </label>
+              </_AdminField>
+            );
+          }
+          if (f.type === "textarea") {
+            return (
+              <_AdminField key={f.key} label={f.label} hint={f.hint}>
+                <textarea className="search" rows={3}
+                          style={{ width: "100%", minWidth: 0, height: "auto", padding: "8px 10px", resize: "vertical", cursor: "text", color: "var(--text-1)", fontFamily: "inherit", lineHeight: 1.5 }}
+                          value={v == null ? "" : v} onChange={e => set(e.target.value)}/>
+              </_AdminField>
+            );
+          }
+          const inputType = f.type === "date" ? "date"
+                          : f.type === "email" ? "email"
+                          : f.type === "tel" ? "tel"
+                          : f.type === "url" ? "url"
+                          : (f.type === "int" || f.type === "num") ? "number"
+                          : "text";
+          const stepAttr = f.type === "num" ? "any" : (f.type === "int" ? "1" : undefined);
+          const inputVal = f.type === "date" ? dateValue(v) : (v == null ? "" : String(v));
+          return (
+            <_AdminField key={f.key} label={f.label} hint={f.hint}>
+              <input className="search" type={inputType} step={stepAttr}
+                     style={{ width: "100%", minWidth: 0, cursor: "text", color: "var(--text-1)" }}
+                     value={inputVal} onChange={e => set(e.target.value)}/>
+            </_AdminField>
+          );
+        })}
+      </div>
+      <div className="row" style={{ gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={onCancel} disabled={busy}>Annuler</button>
+        <button className="btn primary" onClick={onSave} disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</button>
+      </div>
+    </div>
+  );
+}
+
+function _TableEditor({ table, clientId, onChanged }) {
+  const schema = TABLE_SCHEMAS[table];
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [editingId, setEditingId] = React.useState(null);
+  const [adding, setAdding] = React.useState(false);
+  const [draft, setDraft] = React.useState({});
+  const [error, setError] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+
+  async function load() {
+    if (!clientId) { setRows([]); return; }
+    setLoading(true);
+    let q = sb.from(table).select("*").eq("client_id", clientId);
+    if (schema.orderBy) q = q.order(schema.orderBy, { ascending: !schema.orderDesc });
+    const { data, error: err } = await q;
+    setLoading(false);
+    if (err) { setError(err.message); setRows([]); return; }
+    setRows(data || []);
+  }
+
+  React.useEffect(() => { load(); }, [table, clientId]);
+
+  function startEdit(r) {
+    setEditingId(r.id); setAdding(false);
+    setDraft({ ...r });
+    setError(null);
+  }
+  function startAdd() {
+    setAdding(true); setEditingId(null);
+    const empty = {};
+    schema.fields.forEach(f => { empty[f.key] = f.type === "bool" ? false : ""; });
+    setDraft(empty);
+    setError(null);
+  }
+  function cancel() {
+    setEditingId(null); setAdding(false); setDraft({}); setError(null);
+  }
+
+  function buildPayload() {
+    const p = {};
+    schema.fields.forEach(f => {
+      let v = draft[f.key];
+      if (v === "" || v === undefined) v = null;
+      else if (f.type === "int") { v = parseInt(v, 10); if (Number.isNaN(v)) v = null; }
+      else if (f.type === "num") { v = parseFloat(v); if (Number.isNaN(v)) v = null; }
+      else if (f.type === "bool") v = !!v;
+      else if (typeof v === "string") v = v.trim() || null;
+      p[f.key] = v;
+    });
+    return p;
+  }
+
+  async function save() {
+    setError(null);
+    for (const f of schema.fields) {
+      if (f.required) {
+        const v = draft[f.key];
+        if (v === undefined || v === null || (typeof v === "string" && !v.trim())) {
+          setError("Champ requis manquant : " + f.label.replace(" *", ""));
+          return;
+        }
+      }
+    }
+    setBusy(true);
+    const payload = buildPayload();
+    let res;
+    if (adding) {
+      payload.client_id = clientId;
+      res = await sb.from(table).insert(payload).select().single();
+    } else {
+      res = await sb.from(table).update(payload).eq("id", editingId).select().single();
+    }
+    setBusy(false);
+    if (res.error) { setError(res.error.message); return; }
+    cancel();
+    await load();
+    if (onChanged) onChanged();
+  }
+
+  async function del(id) {
+    if (!window.confirm("Supprimer cette ligne définitivement ?")) return;
+    setError(null);
+    const { error: err } = await sb.from(table).delete().eq("id", id);
+    if (err) { setError(err.message); return; }
+    await load();
+    if (onChanged) onChanged();
+  }
+
+  return (
+    <div className="stack-md">
+      <div className="row between">
+        <div className="muted small">{loading ? "Chargement…" : (rows.length + " ligne" + (rows.length > 1 ? "s" : ""))}</div>
+        {!editingId && !adding && (
+          <button className="btn primary small" onClick={startAdd} disabled={!clientId}>
+            <Icon name="plus" size={12}/> Ajouter
+          </button>
+        )}
+      </div>
+
+      {error && <div className="small" style={{ color: "var(--danger)" }}>{error}</div>}
+
+      {adding && (
+        <_RowForm schema={schema} draft={draft} setDraft={setDraft}
+                  onSave={save} onCancel={cancel} busy={busy}
+                  title={"Nouvelle ligne · " + schema.label}/>
+      )}
+
+      {rows.map(r => editingId === r.id ? (
+        <_RowForm key={r.id} schema={schema} draft={draft} setDraft={setDraft}
+                  onSave={save} onCancel={cancel} busy={busy}
+                  title={"Édition · " + schema.summary(r)}/>
+      ) : (
+        <div key={r.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10, gap: 8 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{schema.summary(r)}</div>
+            <div className="small muted mono" style={{ fontSize: 10.5 }}>{r.id}</div>
+          </div>
+          <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+            <button className="btn small" onClick={() => startEdit(r)} title="Éditer"><Icon name="edit" size={12}/></button>
+            <button className="btn small" onClick={() => del(r.id)} title="Supprimer" style={{ color: "var(--danger)" }}>×</button>
+          </div>
+        </div>
+      ))}
+
+      {!loading && rows.length === 0 && !adding && (
+        <div className="muted small" style={{ padding: 24, textAlign: "center", border: "1px dashed var(--border-soft)", borderRadius: 10 }}>
+          {clientId ? "Aucune ligne pour ce client. Cliquez Ajouter pour en créer une." : "Sélectionne un client en haut du panneau."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DataEditDrawer({ open, onClose, isAdmin, viewingClientId, onChanged }) {
+  const clients = window.__HELPAI_CLIENTS_ROWS || [];
+  const [tab, setTab] = React.useState("leads");
+  const [scopedId, setScopedId] = React.useState(viewingClientId || (clients[0] && clients[0].id) || null);
+
+  React.useEffect(() => {
+    if (viewingClientId) setScopedId(viewingClientId);
+  }, [viewingClientId]);
+
+  React.useEffect(() => {
+    if (!scopedId && clients[0]) setScopedId(clients[0].id);
+  }, [open]);
+
+  if (!isAdmin) return null;
+
+  const tabs = [
+    { id: "kpis",      label: "KPIs",      table: "agency_kpis" },
+    { id: "leads",     label: "Leads",     table: "agency_leads" },
+    { id: "invoices",  label: "Factures",  table: "agency_invoices" },
+    { id: "documents", label: "Documents", table: "agency_documents" },
+  ];
+  const active = tabs.find(t => t.id === tab) || tabs[0];
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  return (
+    <React.Fragment>
+      <aside style={{
+        position: "fixed", top: 0, right: 0, bottom: 0,
+        width: 760, maxWidth: "94vw",
+        background: "var(--bg)",
+        borderLeft: "1px solid var(--border)",
+        boxShadow: "-12px 0 48px rgba(0,0,0,0.45)",
+        display: "flex", flexDirection: "column",
+        transform: open ? "translateX(0)" : "translateX(110%)",
+        transition: "transform 0.25s ease",
+        zIndex: 100,
+        pointerEvents: open ? "auto" : "none",
+      }}>
+        <header style={{
+          padding: "16px 20px", borderBottom: "1px solid var(--border)",
+          display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>Édition manuelle</div>
+            <div className="small muted">CRUD complet sur les données brutes du client</div>
+          </div>
+          <button className="btn icon ghost" onClick={onClose} title="Fermer">×</button>
+        </header>
+
+        <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border-soft)" }}>
+          <label className="small muted" style={{ display: "block", marginBottom: 6 }}>Client</label>
+          <select className="search"
+                  style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "pointer" }}
+                  value={scopedId || ""}
+                  onChange={e => setScopedId(e.target.value || null)}>
+            <option value="">— Sélectionner —</option>
+            {clients.map(c => (
+              <option key={c.id} value={c.id}>{c.nom}{c.statut ? " (" + c.statut + ")" : ""}</option>
+            ))}
+          </select>
+        </div>
+
+        <nav style={{ display: "flex", padding: "0 20px", borderBottom: "1px solid var(--border-soft)", gap: 4 }}>
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+                    style={{
+                      padding: "12px 16px",
+                      background: "transparent",
+                      border: 0,
+                      borderBottom: "2px solid " + (t.id === tab ? "var(--accent)" : "transparent"),
+                      color: t.id === tab ? "var(--text-1)" : "var(--text-3)",
+                      fontWeight: t.id === tab ? 600 : 500,
+                      fontSize: 12.5,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          {open && <_TableEditor key={active.table + "-" + (scopedId || "none")} table={active.table} clientId={scopedId} onChanged={onChanged}/>}
+        </div>
+      </aside>
+    </React.Fragment>
+  );
+}
+
+window.DataEditDrawer = DataEditDrawer;
 
 /* ============ CRM ============ */
 function ScreenCustomers() {
@@ -2529,21 +3454,21 @@ function ScreenCustomers() {
           <div className="card">
             <div className="card-head">
               <div>
-                <div className="card-title">Leads entrants tractés automatiquement</div>
-                <div className="card-sub">UTM, source, landing et scoring capturés en temps réel via les automations</div>
+                <EditableText value="Leads entrants tractés automatiquement" tag="div" className="card-title"/>
+                <EditableText value="UTM, source, landing et scoring capturés en temps réel via les automations" tag="div" className="card-sub"/>
               </div>
-              <span className="pill live"><span className="dot"/> Tracking actif</span>
+              <span className="pill live"><span className="dot"/> <EditableText value="Tracking actif" tag="span"/></span>
             </div>
             <table className="data">
               <thead>
                 <tr>
-                  <th>Lead</th>
-                  <th>Source</th>
-                  <th>Campagne / Landing</th>
-                  <th>Score</th>
-                  <th>Statut</th>
-                  <th>Owner</th>
-                  <th>Reçu</th>
+                  <EditableText value="Lead" tag="th"/>
+                  <EditableText value="Source" tag="th"/>
+                  <EditableText value="Campagne / Landing" tag="th"/>
+                  <EditableText value="Score" tag="th"/>
+                  <EditableText value="Statut" tag="th"/>
+                  <EditableText value="Owner" tag="th"/>
+                  <EditableText value="Reçu" tag="th"/>
                   <th></th>
                 </tr>
               </thead>
@@ -2556,20 +3481,20 @@ function ScreenCustomers() {
                           {l.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
                         </span>
                         <div>
-                          <strong style={{ fontSize: 12.5 }}>{l.name}</strong>
-                          <div className="small muted">{l.company}</div>
+                          <EditableText value={l.name} tag="strong" style={{ fontSize: 12.5 }}/>
+                          <EditableText value={l.company} tag="div" className="small muted"/>
                         </div>
                       </div>
                     </td>
                     <td>
                       <span className="row" style={{ gap: 8 }}>
                         <span style={{ width: 8, height: 8, borderRadius: 2, background: sourceColors[l.source] || "var(--text-3)" }}/>
-                        <span style={{ fontSize: 12.5 }}>{l.source}</span>
+                        <EditableText value={l.source} tag="span" style={{ fontSize: 12.5 }}/>
                       </span>
                     </td>
                     <td>
-                      <div style={{ fontSize: 12.5 }}>{l.campaign}</div>
-                      <div className="small muted mono">{l.landing}</div>
+                      <EditableText value={l.campaign} tag="div" style={{ fontSize: 12.5 }}/>
+                      <EditableText value={l.landing} tag="div" className="small muted mono"/>
                     </td>
                     <td>
                       <div className="row" style={{ gap: 8 }}>
@@ -2605,8 +3530,8 @@ function ScreenCustomers() {
           <div className="grid g-2">
             <div className="card">
               <div className="card-head">
-                <div className="card-title">Volume entrants · 30 derniers jours</div>
-                <span className="tag accent">Tracking auto</span>
+                <EditableText value="Volume entrants · 30 derniers jours" tag="div" className="card-title"/>
+                <EditableText value="Tracking auto" tag="span" className="tag accent"/>
               </div>
               <div className="card-body">
                 <BarChart
@@ -2622,8 +3547,8 @@ function ScreenCustomers() {
             </div>
             <div className="card">
               <div className="card-head">
-                <div className="card-title">Automations de tracking actives</div>
-                <span className="mono small muted">5 actives</span>
+                <EditableText value="Automations de tracking actives" tag="div" className="card-title"/>
+                <EditableText value="5 actives" tag="span" className="mono small muted"/>
               </div>
               <div className="card-body stack-md">
                 {[
@@ -2638,8 +3563,8 @@ function ScreenCustomers() {
                       <Icon name="zap" size={14}/>
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12.5 }}>{a.name}</div>
-                      <div className="small muted">{a.desc}</div>
+                      <EditableText value={a.name} tag="div" style={{ fontWeight: 600, fontSize: 12.5 }}/>
+                      <EditableText value={a.desc} tag="div" className="small muted"/>
                     </div>
                     <span className="mono small muted">{a.runs}×</span>
                   </div>
@@ -2653,7 +3578,7 @@ function ScreenCustomers() {
       {tab === "clients" && (
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Portefeuille client</div>
+            <EditableText value="Portefeuille client" tag="div" className="card-title"/>
             <div className="chips">
               <button className={"chip " + (filter === "all" ? "active" : "")} onClick={() => setFilter("all")}>Tous <span className="count">{CUSTOMERS.length}</span></button>
               <button className={"chip " + (filter === "ok" ? "active" : "")} onClick={() => setFilter("ok")}>En bonne santé</button>
@@ -2664,9 +3589,13 @@ function ScreenCustomers() {
           <table className="data">
             <thead>
               <tr>
-                <th>Client</th><th>Type</th><th>Valeur</th>
-                <th style={{ width: "18%" }}>Santé</th>
-                <th>Owner</th><th>Depuis</th><th>Prochaine action</th>
+                <EditableText value="Client" tag="th"/>
+                <EditableText value="Type" tag="th"/>
+                <EditableText value="Valeur" tag="th"/>
+                <EditableText value="Santé" tag="th" style={{ width: "18%" }}/>
+                <EditableText value="Owner" tag="th"/>
+                <EditableText value="Depuis" tag="th"/>
+                <EditableText value="Prochaine action" tag="th"/>
               </tr>
             </thead>
             <tbody>
@@ -2722,11 +3651,11 @@ function ScreenAI() {
       <div className="hero-panel">
         <div>
           <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-            <span className="tag accent"><Icon name="sparkles" size={10}/> Agent HelpAi</span>
-            <span className="pill live"><span className="dot"/> Actif 24/7</span>
+            <span className="tag accent"><Icon name="sparkles" size={10}/> <EditableText value="Agent HelpAi" tag="span"/></span>
+            <span className="pill live"><span className="dot"/> <EditableText value="Actif 24/7" tag="span"/></span>
           </div>
-          <div className="hp-title">L'IA a traité 8 547 tâches ce mois — équivalent à 14.2 jours de travail humain.</div>
-          <div className="hp-sub">Qualification de leads, relances, scoring, réponses first-touch, collecte d'avis — tout tourne en continu.</div>
+          <EditableText value="L'IA a traité 8 547 tâches ce mois — équivalent à 14.2 jours de travail humain." tag="div" className="hp-title" multiline/>
+          <EditableText value="Qualification de leads, relances, scoring, réponses first-touch, collecte d'avis — tout tourne en continu." tag="div" className="hp-sub" multiline/>
         </div>
         <button className="btn primary"><Icon name="plus" size={14}/> Nouvelle compétence</button>
       </div>
@@ -2741,10 +3670,10 @@ function ScreenAI() {
       <div className="grid g-2-1">
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Activité de l'agent (24h)</div>
+            <EditableText value="Activité de l'agent (24h)" tag="div" className="card-title"/>
             <div className="chart-legend">
-              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> Tâches</span>
-              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> Succès</span>
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> <EditableText value="Tâches" tag="span"/></span>
+              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> <EditableText value="Succès" tag="span"/></span>
             </div>
           </div>
           <div className="card-body">
@@ -2767,7 +3696,7 @@ function ScreenAI() {
 
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Compétences actives</div>
+            <EditableText value="Compétences actives" tag="div" className="card-title"/>
           </div>
           <div className="card-body stack-md">
             {[
@@ -2780,7 +3709,7 @@ function ScreenAI() {
             ].map((s, i) => (
               <div key={i} className="stack-sm">
                 <div className="row between">
-                  <span style={{ fontSize: 12.5, fontWeight: 500 }}>{s.n}</span>
+                  <EditableText value={s.n} tag="span" style={{ fontSize: 12.5, fontWeight: 500 }}/>
                   <span className="mono small">{s.c.toLocaleString("fr")}</span>
                 </div>
                 <div className="progress">
@@ -2794,8 +3723,8 @@ function ScreenAI() {
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">Conversations récentes de l'agent</div>
-          <span className="pill live"><span className="dot"/> Temps réel</span>
+          <EditableText value="Conversations récentes de l'agent" tag="div" className="card-title"/>
+          <span className="pill live"><span className="dot"/> <EditableText value="Temps réel" tag="span"/></span>
         </div>
         <div className="card-body" style={{ padding: 0 }}>
           {[
@@ -2808,15 +3737,15 @@ function ScreenAI() {
               <div className="row between" style={{ marginBottom: 6 }}>
                 <div className="row" style={{ gap: 10 }}>
                   <span className={"av av-colors-" + ((i % 4) + 1)}>{c.lead.split(" ").map(x => x[0]).join("").slice(0, 2)}</span>
-                  <strong>{c.lead}</strong>
+                  <EditableText value={c.lead} tag="strong"/>
                   <span className="tag accent">Score {c.score}</span>
                 </div>
                 <span className="mono small muted">{c.time}</span>
               </div>
-              <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 6 }}>"{c.msg}"</div>
+              <EditableText value={c.msg} tag="div" multiline style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 6 }}/>
               <div className="row" style={{ gap: 8 }}>
                 <Icon name="arrow" size={12} className="muted"/>
-                <span className="small" style={{ color: "var(--accent)", fontWeight: 500 }}>{c.action}</span>
+                <EditableText value={c.action} tag="span" className="small" style={{ color: "var(--accent)", fontWeight: 500 }}/>
               </div>
             </div>
           ))}
@@ -2852,16 +3781,20 @@ function ScreenAutomations() {
         <table className="data">
           <thead>
             <tr>
-              <th>Workflow</th><th>Déclencheur</th><th>Exécutions</th>
-              <th style={{ width: "18%" }}>Succès</th>
-              <th>Dernière</th><th>État</th><th></th>
+              <EditableText value="Workflow" tag="th"/>
+              <EditableText value="Déclencheur" tag="th"/>
+              <EditableText value="Exécutions" tag="th"/>
+              <EditableText value="Succès" tag="th" style={{ width: "18%" }}/>
+              <EditableText value="Dernière" tag="th"/>
+              <EditableText value="État" tag="th"/>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {AUTOMATIONS.map((a, i) => (
               <tr key={i}>
-                <td><strong>{a.name}</strong></td>
-                <td><code className="code">{a.trigger}</code></td>
+                <td><EditableText value={a.name} tag="strong"/></td>
+                <td><EditableText value={a.trigger} tag="code" className="code"/></td>
                 <td className="mono">{a.runs.toLocaleString("fr")}</td>
                 <td>
                   <div className="row" style={{ gap: 10 }}>
@@ -2874,8 +3807,8 @@ function ScreenAutomations() {
                 <td className="muted small">{a.last}</td>
                 <td>
                   {a.status === "on"
-                    ? <span className="tag success"><span className="status-dot ok"/> Actif</span>
-                    : <span className="tag"><span className="status-dot off"/> Pause</span>}
+                    ? <span className="tag success"><span className="status-dot ok"/> <EditableText value="Actif" tag="span"/></span>
+                    : <span className="tag"><span className="status-dot off"/> <EditableText value="Pause" tag="span"/></span>}
                 </td>
                 <td>
                   <button className="btn icon ghost">
@@ -2932,16 +3865,16 @@ function ScreenIntegrations() {
                   {it.name.split(" ").map(x => x[0]).slice(0, 2).join("")}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{it.name}</div>
-                  <div className="small muted">{it.cat}</div>
+                  <EditableText value={it.name} tag="div" style={{ fontWeight: 600, fontSize: 13 }}/>
+                  <EditableText value={it.cat} tag="div" className="small muted"/>
                 </div>
               </div>
               {it.status === "connected" && <span className="status-dot ok"/>}
             </div>
             <div className="small muted" style={{ marginBottom: 10, minHeight: 18 }}>
               {it.status === "connected"
-                ? <>Dernière sync : <strong style={{ color: "var(--text-2)" }}>{it.last}</strong></>
-                : it.status === "disconnected" ? "Connexion perdue" : "Disponible à installer"}
+                ? <><EditableText value="Dernière sync :" tag="span"/> <strong style={{ color: "var(--text-2)" }}>{it.last}</strong></>
+                : it.status === "disconnected" ? <EditableText value="Connexion perdue" tag="span"/> : <EditableText value="Disponible à installer" tag="span"/>}
             </div>
             <div className="row between">
               <span className="small mono muted">{it.events !== "—" ? it.events + " évts" : "—"}</span>
@@ -3318,9 +4251,7 @@ function ScreenArchitecture() {
     <div className="stack-lg fade-up" style={{ paddingBottom: 40 }}>
       {/* Hero */}
       <div style={{ textAlign: "center", padding: "20px 0 10px" }}>
-        <div className="small" style={{ color: "var(--accent)", letterSpacing: "0.2em", fontWeight: 700, marginBottom: 12 }}>
-          INFRASTRUCTURE
-        </div>
+        <EditableText value="INFRASTRUCTURE" tag="div" className="small" style={{ color: "var(--accent)", letterSpacing: "0.2em", fontWeight: 700, marginBottom: 12 }}/>
         <h2 style={{
           fontFamily: "var(--font-display)",
           fontSize: 42,
@@ -3329,41 +4260,33 @@ function ScreenArchitecture() {
           margin: "0 0 10px",
           color: "var(--text)"
         }}>
-          Ce que tu <span style={{ color: pillar.color }}>déploies</span>.
+          <EditableText value="Ce que tu" tag="span"/> <span style={{ color: pillar.color }}><EditableText value="déploies" tag="span"/></span>.
         </h2>
-        <div className="small muted" style={{ fontSize: 13.5 }}>
-          Clique sur un pilier pour voir les automations et leur impact mesuré sur 12 mois.
-        </div>
+        <EditableText value="Clique sur un pilier pour voir les automations et leur impact mesuré sur 12 mois." tag="div" className="small muted" style={{ fontSize: 13.5 }} multiline/>
       </div>
 
       {/* Top nodes */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, position: "relative" }}>
-        <div style={{
+        <EditableText value="Dashboard client" tag="div" style={{
           padding: "8px 16px", borderRadius: 99,
           border: "1px solid var(--border)", background: "var(--surface)",
           fontSize: 12.5, fontWeight: 500
-        }}>
-          Dashboard client
-        </div>
+        }}/>
         <div style={{ width: 1, height: 14, background: "var(--border)" }}/>
-        <div style={{
+        <EditableText value="Telegram / WhatsApp" tag="div" style={{
           padding: "8px 16px", borderRadius: 99,
           border: "1px solid var(--border)", background: "var(--surface)",
           fontSize: 12.5, fontWeight: 500
-        }}>
-          Telegram / WhatsApp
-        </div>
+        }}/>
         <div style={{ width: 1, height: 14, background: "var(--border)" }}/>
-        <div style={{
+        <EditableText value="ORCHESTRATEUR IA" tag="div" style={{
           padding: "10px 22px", borderRadius: 99,
           border: "1.5px solid " + pillar.color,
           background: pillar.colorSoft,
           color: pillar.color,
           fontSize: 13, fontWeight: 700, letterSpacing: "0.1em",
           boxShadow: `0 0 0 6px ${pillar.colorSoft}`,
-        }}>
-          ORCHESTRATEUR IA
-        </div>
+        }}/>
       </div>
 
       {/* Connector lines + pillars */}
@@ -3405,25 +4328,21 @@ function ScreenArchitecture() {
                 }}>
                   <Icon name={p.icon} size={18}/>
                 </div>
-                <div style={{
+                <EditableText value={p.label} tag="div" style={{
                   fontFamily: "var(--font-display)",
                   fontSize: 13, fontWeight: 700,
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
                   color: "var(--text)",
                   marginBottom: 6
-                }}>
-                  {p.label}
-                </div>
-                <div style={{ fontSize: 11.5, color: "var(--text-3)", minHeight: 48, lineHeight: 1.5 }}>
-                  {p.tagline.split(".")[0].length < 50 ? p.tagline : {
+                }}/>
+                <EditableText value={p.tagline.split(".")[0].length < 50 ? p.tagline : {
                     offre: "Positionnement, pricing dynamique, veille concurrentielle.",
                     acquisition: "Leads qualifiés en continu via Ads et organique.",
                     ventes: "Transformer les leads en clients signés.",
                     delivery: "Livraison, satisfaction client, avis Google.",
                     reporting: "KPIs temps réel, alertes, preuves de ROI.",
-                  }[k]}
-                </div>
+                  }[k]} tag="div" multiline style={{ fontSize: 11.5, color: "var(--text-3)", minHeight: 48, lineHeight: 1.5 }}/>
                 <div style={{ marginTop: 12, display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap", minHeight: 20 }}>
                   {{
                     offre: ["Veille", "Pricing"],
@@ -3432,12 +4351,12 @@ function ScreenArchitecture() {
                     delivery: ["Onboard", "Support"],
                     reporting: ["KPIs", "Alertes"],
                   }[k].map(chip => (
-                    <span key={chip} style={{
+                    <EditableText key={chip} value={chip} tag="span" style={{
                       fontSize: 10.5, padding: "2px 7px", borderRadius: 99,
                       background: isActive ? p.color : "var(--surface-2)",
                       color: isActive ? "var(--accent-ink)" : "var(--text-3)",
                       fontWeight: 500,
-                    }}>{chip}</span>
+                    }}/>
                   ))}
                 </div>
                 <div style={{
@@ -3448,7 +4367,7 @@ function ScreenArchitecture() {
                   borderRadius: 99, display: "inline-block",
                   fontWeight: 600,
                 }}>
-                  {p.automations.length} automations
+                  {p.automations.length} <EditableText value="automations" tag="span"/>
                 </div>
               </button>
             );
@@ -3475,16 +4394,14 @@ function ScreenArchitecture() {
               fontWeight: 700,
               padding: "3px 10px",
             }}>
-              <Icon name={pillar.icon} size={10}/> {pillar.label}
+              <Icon name={pillar.icon} size={10}/> <EditableText value={pillar.label} tag="span"/>
             </span>
-            <div style={{
+            <EditableText value={pillar.tagline} tag="div" multiline style={{
               fontFamily: "var(--font-display)",
               fontSize: 17, fontWeight: 600,
               marginTop: 10, fontStyle: "italic",
               color: "var(--text)"
-            }}>
-              {pillar.tagline}
-            </div>
+            }}/>
           </div>
           <div style={{
             textAlign: "center",
@@ -3501,45 +4418,35 @@ function ScreenArchitecture() {
             }}>
               {pillar.automations.length}
             </div>
-            <div style={{ fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: pillar.color, marginTop: 6, fontWeight: 600 }}>
-              Automations actives
-            </div>
+            <EditableText value="Automations actives" tag="div" style={{ fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: pillar.color, marginTop: 6, fontWeight: 600 }}/>
           </div>
         </div>
 
         <div className="grid g-2" style={{ gap: 28, marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 14 }}>
-              Problèmes identifiés
-            </div>
+            <EditableText value="Problèmes identifiés" tag="div" style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 14 }}/>
             <div className="stack-md">
               {pillar.problems.map((p, i) => (
                 <div key={i} className="row" style={{ gap: 10, alignItems: "flex-start" }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: pillar.color, marginTop: 7, flexShrink: 0 }}/>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text)", marginBottom: 2 }}>{p.t}</div>
-                    <div className="small muted" style={{ lineHeight: 1.5 }}>{p.d}</div>
+                    <EditableText value={p.t} tag="div" style={{ fontWeight: 600, fontSize: 13, color: "var(--text)", marginBottom: 2 }}/>
+                    <EditableText value={p.d} tag="div" multiline className="small muted" style={{ lineHeight: 1.5 }}/>
                   </div>
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 14 }}>
-              Pourquoi on a construit ça comme ça
-            </div>
-            <div style={{
+            <EditableText value="Pourquoi on a construit ça comme ça" tag="div" style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 14 }}/>
+            <EditableText value={pillar.why} tag="div" multiline style={{
               padding: 16,
               border: "1px solid var(--border-soft)",
               borderRadius: 10,
               background: "var(--bg-2)",
               fontSize: 12.5, lineHeight: 1.65, color: "var(--text-2)",
-            }}>
-              {pillar.why}
-            </div>
-            <div style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, margin: "20px 0 12px" }}>
-              Impact mesuré sur 12 mois
-            </div>
+            }}/>
+            <EditableText value="Impact mesuré sur 12 mois" tag="div" style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, margin: "20px 0 12px" }}/>
             <div className="grid g-2" style={{ gap: 10 }}>
               {pillar.impact.map((im, i) => (
                 <div key={i} style={{
@@ -3548,13 +4455,11 @@ function ScreenArchitecture() {
                   borderRadius: 10,
                   background: "var(--bg-2)",
                 }}>
-                  <div className="small muted" style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6, fontWeight: 600 }}>
-                    {im.label}
-                  </div>
+                  <EditableText value={im.label} tag="div" className="small muted" style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6, fontWeight: 600 }}/>
                   <div className="mono" style={{ fontSize: 13, color: "var(--text)" }}>
-                    <span className="muted">{im.from}</span>
+                    <EditableText value={im.from} tag="span" className="muted"/>
                     <span style={{ margin: "0 6px", color: pillar.color }}>→</span>
-                    <strong style={{ color: pillar.color }}>{im.to}</strong>
+                    <EditableText value={im.to} tag="strong" style={{ color: pillar.color }}/>
                   </div>
                 </div>
               ))}
@@ -3566,9 +4471,9 @@ function ScreenArchitecture() {
         <div>
           <div className="row between" style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: pillar.color }}>
-              <Icon name={pillar.icon} size={12}/> Les {pillar.automations.length} automations du pilier {pillar.label}
+              <Icon name={pillar.icon} size={12}/> <EditableText value="Les" tag="span"/> {pillar.automations.length} <EditableText value="automations du pilier" tag="span"/> <EditableText value={pillar.label} tag="span"/>
             </div>
-            <div className="small muted">Clique sur une automation pour voir ses avantages client</div>
+            <EditableText value="Clique sur une automation pour voir ses avantages client" tag="div" className="small muted"/>
           </div>
           <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
             {pillar.automations.map((a, i) => (
@@ -3585,14 +4490,12 @@ function ScreenArchitecture() {
                   transition: "all 0.15s",
                 }}
               >
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, color: "var(--text)" }}>{a.name}</div>
-                <div className="small muted" style={{ fontSize: 11.5, lineHeight: 1.5, marginBottom: 10, minHeight: 36 }}>{a.desc}</div>
-                <div className="mono" style={{ fontSize: 12, color: pillar.color, fontWeight: 600, marginBottom: 10 }}>
-                  {a.result}
-                </div>
+                <EditableText value={a.name} tag="div" style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, color: "var(--text)" }}/>
+                <EditableText value={a.desc} tag="div" multiline className="small muted" style={{ fontSize: 11.5, lineHeight: 1.5, marginBottom: 10, minHeight: 36 }}/>
+                <EditableText value={a.result} tag="div" className="mono" style={{ fontSize: 12, color: pillar.color, fontWeight: 600, marginBottom: 10 }}/>
                 <div className="row between">
-                  <span className="tag" style={{ fontSize: 10, padding: "1px 8px" }}>{a.freq}</span>
-                  <span className="small" style={{ fontSize: 10.5, color: "var(--success)" }}>● Actif</span>
+                  <EditableText value={a.freq} tag="span" className="tag" style={{ fontSize: 10, padding: "1px 8px" }}/>
+                  <EditableText value="● Actif" tag="span" className="small" style={{ fontSize: 10.5, color: "var(--success)" }}/>
                 </div>
                 <div className="small" style={{
                   marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border-soft)",
@@ -3619,16 +4522,14 @@ function ScreenArchitecture() {
                     background: pillar.color, color: "var(--accent-ink)", borderColor: "transparent",
                     fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700
                   }}>
-                    <Icon name={pillar.icon} size={10}/> {pillar.label}
+                    <Icon name={pillar.icon} size={10}/> <EditableText value={pillar.label} tag="span"/>
                   </span>
-                  <div style={{
+                  <EditableText value={pillar.automations[openAuto].name} tag="div" style={{
                     fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700,
                     marginTop: 8, letterSpacing: "-0.01em", color: "var(--text)"
-                  }}>
-                    {pillar.automations[openAuto].name}
-                  </div>
+                  }}/>
                   <div className="small muted" style={{ marginTop: 4 }}>
-                    {pillar.automations[openAuto].desc} · <strong style={{ color: pillar.color }}>{pillar.automations[openAuto].freq}</strong>
+                    <EditableText value={pillar.automations[openAuto].desc} tag="span"/> · <EditableText value={pillar.automations[openAuto].freq} tag="strong" style={{ color: pillar.color }}/>
                   </div>
                 </div>
                 <div style={{
@@ -3637,17 +4538,11 @@ function ScreenArchitecture() {
                   borderRadius: 10, padding: "10px 16px",
                   background: "var(--bg-2)", minWidth: 140,
                 }}>
-                  <div className="small" style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: pillar.color, fontWeight: 700, marginBottom: 4 }}>
-                    Résultat mesuré
-                  </div>
-                  <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: pillar.color }}>
-                    {pillar.automations[openAuto].result}
-                  </div>
+                  <EditableText value="Résultat mesuré" tag="div" className="small" style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: pillar.color, fontWeight: 700, marginBottom: 4 }}/>
+                  <EditableText value={pillar.automations[openAuto].result} tag="div" className="mono" style={{ fontSize: 16, fontWeight: 700, color: pillar.color }}/>
                 </div>
               </div>
-              <div style={{ fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 12 }}>
-                Ce que cette automation change concrètement pour le client
-              </div>
+              <EditableText value="Ce que cette automation change concrètement pour le client" tag="div" style={{ fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 12 }}/>
               <div className="grid g-2" style={{ gap: 10 }}>
                 {pillar.automations[openAuto].details.map((d, i) => (
                   <div key={i} style={{
@@ -3662,7 +4557,7 @@ function ScreenArchitecture() {
                       width: 6, height: 6, borderRadius: "50%",
                       background: pillar.color, marginTop: 7, flexShrink: 0
                     }}/>
-                    <span>{d}</span>
+                    <EditableText value={d} tag="span" multiline/>
                   </div>
                 ))}
               </div>
@@ -3702,6 +4597,9 @@ function buildNav(isAdmin) {
   ];
   if (isAdmin) {
     nav[1].items.push({ id: "automations", label: "Automations", icon: "automations" });
+    nav.push({ group: "Admin", items: [
+      { id: "clients", label: "Clients", icon: "customers" },
+    ]});
   }
   return nav;
 }
@@ -3715,16 +4613,21 @@ const SCREEN_META = {
   customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
   architecture: { title: "Architecture",   sub: "Infrastructure HelpAi — 5 piliers",        breadcrumb: "Infrastructure" },
   integrations: { title: "Intégrations",   sub: "Services connectés à votre espace",       breadcrumb: "Écosystème" },
+  clients:      { title: "Gestion des clients", sub: "Portfolio agence — édition complète & connecteurs API", breadcrumb: "Admin" },
+  account:      { title: "Mon compte", sub: "Profil, sécurité, documents & factures", breadcrumb: "Compte" },
 };
 
 const EditContext = window.__HelpAi_EditContext || React.createContext({ editing: false });
 window.__HelpAi_EditContext = EditContext;
 
-function App({ isAdmin, displayName, userClient, onLogout }) {
+function App({ user, isAdmin, displayName, userClient, onLogout }) {
   const [theme, setTheme] = React.useState(() => localStorage.getItem('theme') || 'dark');
-  const [workspace, setWorkspace] = React.useState(isAdmin ? 'agency' : 'client');
-  const [editMode, setEditMode] = React.useState(false);
+  const [editorOpen, setEditorOpen] = React.useState(false);
   const [screen, setScreen] = React.useState("overview");
+  const [viewingClientId, setViewingClientId] = React.useState(null);
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [tick, setTick] = React.useState(0);
+  const initialized = React.useRef(false);
 
   React.useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -3732,12 +4635,33 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
   }, [theme]);
 
   React.useEffect(() => {
-    if (workspace === 'client' && screen === 'automations') setScreen('overview');
-  }, [workspace, screen]);
+    if (!initialized.current) { initialized.current = true; return; }
+    const cid = viewingClientId || (userClient ? userClient.id : null);
+    const adminMode = isAdmin && !viewingClientId;
+    let cancelled = false;
+    if (window.loadAllData) {
+      window.loadAllData({ isAdmin: adminMode, clientId: cid })
+        .then(() => { if (!cancelled) setTick(t => t + 1); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [viewingClientId, refreshKey, isAdmin, userClient]);
 
-  const meta = SCREEN_META[screen];
-  const isAgencyView = isAdmin && workspace === 'agency';
-  const editing = isAgencyView && editMode;
+  const meta = SCREEN_META[screen] || SCREEN_META.overview;
+  const editing = isAdmin && editorOpen;
+
+  const refresh = React.useCallback(() => setRefreshKey(k => k + 1), []);
+  const viewAsClient = React.useCallback((cid) => {
+    setViewingClientId(cid);
+    setScreen("overview");
+  }, []);
+  const exitClientView = React.useCallback(() => setViewingClientId(null), []);
+
+  const viewedClient = React.useMemo(() => {
+    if (!viewingClientId) return null;
+    const rows = window.__HELPAI_CLIENTS_ROWS || [];
+    return rows.find(c => c.id === viewingClientId) || null;
+  }, [viewingClientId, tick]);
 
   const renderScreen = () => {
     switch (screen) {
@@ -3745,10 +4669,12 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
       case "acquisition": return <ScreenAcquisition/>;
       case "sales":       return <ScreenSales/>;
       case "ai":          return <ScreenAI/>;
-      case "automations": return isAgencyView ? <ScreenAutomations/> : <ScreenOverview/>;
+      case "automations": return isAdmin ? <ScreenAutomations/> : <ScreenOverview/>;
       case "customers":   return <ScreenCustomers/>;
       case "architecture":return <ScreenArchitecture/>;
       case "integrations":return <ScreenIntegrations/>;
+      case "clients":     return isAdmin ? <ScreenClientsAdmin onViewClient={viewAsClient} onRefresh={refresh} tick={tick}/> : <ScreenOverview/>;
+      case "account":     return <ScreenAccount user={user} userClient={userClient} isAdmin={isAdmin} onRefresh={refresh}/>;
       default:            return <ScreenOverview/>;
     }
   };
@@ -3773,17 +4699,10 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
           <div className="workspace-avatar">{(displayName || "??").slice(0,2).toUpperCase()}</div>
           <div className="workspace-info">
             <div className="workspace-name">{displayName || "—"}</div>
-            <div className="workspace-role">{isAdmin ? (workspace === 'agency' ? "Agence · Admin" : "Vue client") : "Espace client"}</div>
+            <div className="workspace-role">{isAdmin ? "Admin · Agence" : "Espace client"}</div>
           </div>
           <Icon name="chevDown" size={14} className="workspace-chev"/>
         </div>
-
-        {isAdmin && (
-          <div className="seg">
-            <button className={workspace === "client" ? "active" : ""} onClick={() => setWorkspace("client")}>Vue Client</button>
-            <button className={workspace === "agency" ? "active" : ""} onClick={() => setWorkspace("agency")}>Vue Agence</button>
-          </div>
-        )}
 
         <div className="stack-md" style={{ flex: 1, overflow: "auto" }}>
           {NAV.map((g, gi) => (
@@ -3814,14 +4733,36 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
             <span className="mono">v1.0</span>
           </div>
           <div className="usage-bar"><div style={{ width: "100%" }}/></div>
-          <button className="btn ghost small" style={{ width:'100%', justifyContent:'center', marginTop: 10, height: 28 }} onClick={onLogout}>
+          <button
+            type="button"
+            onClick={() => setScreen("account")}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              width: "100%", padding: "8px 10px",
+              border: "1px solid " + (screen === "account" ? "var(--accent-border)" : "var(--border-soft)"),
+              borderRadius: "var(--r-md)",
+              background: screen === "account" ? "var(--surface-2)" : "var(--surface)",
+              cursor: "pointer", textAlign: "left", color: "var(--text-1)",
+              marginTop: 10, transition: "background 0.15s, border-color 0.15s",
+              fontFamily: "inherit",
+            }}
+            title="Mon compte"
+          >
+            <div className="workspace-avatar">{(displayName || "??").slice(0,2).toUpperCase()}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Mon compte</div>
+              <div className="small muted" style={{ fontSize: 10.5 }}>Profil & documents</div>
+            </div>
+            <Icon name="chev" size={12} className="workspace-chev"/>
+          </button>
+          <button className="btn ghost small" style={{ width:'100%', justifyContent:'center', marginTop: 8, height: 28 }} onClick={onLogout}>
             Déconnexion
           </button>
         </div>
       </aside>
 
       {/* ============ MAIN ============ */}
-      <div className="main">
+      <div className="main" style={{ paddingRight: editorOpen ? 760 : 0, transition: "padding-right 0.25s ease" }}>
         <div className="topbar">
           <div className="crumbs">
             <span>{meta.breadcrumb}</span>
@@ -3836,12 +4777,12 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
           </div>
           {isAdmin && (
             <button
-              className={"btn " + (editMode ? "primary" : "")}
-              onClick={() => setEditMode(!editMode)}
-              title="Activer l'édition manuelle"
+              className={"btn " + (editorOpen ? "primary" : "")}
+              onClick={() => setEditorOpen(o => !o)}
+              title="Édition manuelle des données"
             >
-              <Icon name={editMode ? "check" : "edit"} size={13}/>
-              {editMode ? "Terminer l'édition" : "Modifier"}
+              <Icon name="edit" size={13}/>
+              Modifier
             </button>
           )}
           <button className="btn icon ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Thème">
@@ -3854,8 +4795,19 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
         {editing && (
           <div className="edit-banner">
             <Icon name="edit" size={13}/>
-            <span><strong>Mode édition activé.</strong> Cliquez sur une valeur ou un nom pour l'éditer.</span>
-            <button className="btn small ghost" onClick={() => setEditMode(false)}>Quitter</button>
+            <span>
+              <strong>Mode édition activé.</strong>{" "}
+              Clique directement sur les valeurs ou libellés (ex. CA total, Leads total) pour les modifier visuellement.
+              Pour une modification persistante en BDD, utilise le panneau latéral (KPIs, Leads, Factures, Documents).
+            </span>
+            <button className="btn small ghost" onClick={() => setEditorOpen(false)}>Fermer</button>
+          </div>
+        )}
+        {viewingClientId && viewedClient && (
+          <div className="edit-banner" style={{ background: "var(--accent-soft)", borderColor: "var(--accent-border)" }}>
+            <Icon name="eye" size={13}/>
+            <span><strong>Vue du dashboard de {viewedClient.nom || "—"}.</strong> Toutes les données sont filtrées sur ce client.</span>
+            <button className="btn small ghost" onClick={exitClientView}>Quitter la vue</button>
           </div>
         )}
         <div className="page">
@@ -3865,7 +4817,7 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
               <div className="page-sub">{meta.sub}</div>
             </div>
             <div className="page-actions">
-              <button className="btn" onClick={() => window.loadAllData && window.loadAllData({ isAdmin, clientId: userClient ? userClient.id : null }).then(()=>setScreen(s=>s))}>
+              <button className="btn" onClick={refresh}>
                 <Icon name="refresh" size={13}/> Actualiser
               </button>
               <button className="btn"><Icon name="download" size={13}/> Exporter</button>
@@ -3876,6 +4828,15 @@ function App({ isAdmin, displayName, userClient, onLogout }) {
           </EditContext.Provider>
         </div>
       </div>
+      {isAdmin && (
+        <DataEditDrawer
+          open={editorOpen}
+          onClose={() => setEditorOpen(false)}
+          isAdmin={isAdmin}
+          viewingClientId={viewingClientId}
+          onChanged={refresh}
+        />
+      )}
     </div>
   );
 }
