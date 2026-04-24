@@ -1,0 +1,29 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Temp bundle / design drafts we don't need in the repo
+.claude/bundle/
+.claude/design2/bundle
+.claude/design2/bundle.gz
+.claude/design2/helpai/chats/
+.claude/design2/helpai/project/scraps/
+.claude/design2/helpai/project/uploads/
+.claude/design2/helpai/project/HelpAi Dashboard (standalone).html
+.claude/design2/helpai/project/HelpAi Dashboard - source.html
+
+# Old standalone export (superseded by dashboard.html)
+HelpAi Dashboard _standalone_.html
+
+# Extracted template (rebuildable from design2/)
+.claude/extracted_template.html
+
+# Local Claude Code permissions
+.claude/settings.local.json
+
+# Misc
+*.log
+node_modules/

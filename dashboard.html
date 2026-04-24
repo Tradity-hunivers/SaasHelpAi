@@ -1,0 +1,3890 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1400, initial-scale=1">
+  <title>HelpAi Agency — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+/* =========================================================
+   HelpAi — Design System
+   ========================================================= */
+
+:root {
+  /* Type */
+  --font-display: 'Montserrat', system-ui, sans-serif;
+  --font-body: 'Montserrat', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* DARK (default) */
+  --bg: oklch(0.155 0.008 60);
+  --bg-2: oklch(0.185 0.009 60);
+  --surface: oklch(0.205 0.009 60);
+  --surface-2: oklch(0.235 0.010 60);
+  --surface-hover: oklch(0.255 0.010 60);
+  --border: oklch(0.30 0.010 60);
+  --border-soft: oklch(0.25 0.010 60);
+  --text: oklch(0.97 0.005 60);
+  --text-2: oklch(0.78 0.010 60);
+  --text-3: oklch(0.58 0.012 60);
+  --text-4: oklch(0.42 0.012 60);
+
+  /* Accent: warm amber */
+  --accent: oklch(0.74 0.155 55);
+  --accent-2: oklch(0.80 0.120 60);
+  --accent-soft: oklch(0.74 0.155 55 / 0.12);
+  --accent-border: oklch(0.74 0.155 55 / 0.35);
+  --accent-ink: oklch(0.18 0.04 55);
+
+  /* Semantic (same chroma family) */
+  --success: oklch(0.78 0.13 155);
+  --danger: oklch(0.68 0.17 25);
+  --info: oklch(0.74 0.10 240);
+
+  /* Radii */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  /* Shadows */
+  --shadow-1: 0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-2: 0 1px 0 0 oklch(1 0 0 / 0.04) inset, 0 8px 24px oklch(0 0 0 / 0.4);
+  --shadow-glow: 0 0 0 1px oklch(0.74 0.155 55 / 0.15), 0 8px 24px oklch(0.74 0.155 55 / 0.12);
+
+  /* Grid */
+  --sidebar-w: 240px;
+  --topbar-h: 60px;
+}
+
+[data-theme="light"] {
+  --bg: oklch(0.985 0.004 70);
+  --bg-2: oklch(0.965 0.006 70);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.975 0.005 70);
+  --surface-hover: oklch(0.955 0.006 70);
+  --border: oklch(0.88 0.008 70);
+  --border-soft: oklch(0.92 0.006 70);
+  --text: oklch(0.18 0.010 60);
+  --text-2: oklch(0.38 0.012 60);
+  --text-3: oklch(0.55 0.012 60);
+  --text-4: oklch(0.68 0.012 60);
+
+  --accent: oklch(0.62 0.165 50);
+  --accent-2: oklch(0.70 0.140 55);
+  --accent-soft: oklch(0.62 0.165 50 / 0.10);
+  --accent-border: oklch(0.62 0.165 50 / 0.30);
+  --accent-ink: oklch(1 0 0);
+
+  --success: oklch(0.55 0.14 155);
+  --danger: oklch(0.55 0.19 25);
+  --info: oklch(0.55 0.13 240);
+
+  --shadow-1: 0 1px 0 0 oklch(1 0 0 / 1) inset, 0 1px 2px oklch(0.6 0.01 60 / 0.08);
+  --shadow-2: 0 1px 0 0 oklch(1 0 0 / 1) inset, 0 10px 30px oklch(0.4 0.01 60 / 0.06);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, oklch(0.74 0.155 55 / 0.06), transparent 60%),
+    radial-gradient(800px 400px at 0% 100%, oklch(0.74 0.10 40 / 0.04), transparent 60%),
+    var(--bg);
+}
+
+/* Subtle grain */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
+[data-theme="light"] body::before { opacity: 0.25; }
+
+button { font-family: inherit; color: inherit; cursor: pointer; border: 0; background: transparent; }
+input, select, textarea { font-family: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+
+.mono { font-family: var(--font-mono); font-feature-settings: "tnum"; letter-spacing: -0.01em; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* =========================================================
+   App shell
+   ========================================================= */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  min-height: 100vh;
+  position: relative;
+  z-index: 2;
+}
+
+/* ============ Sidebar ============ */
+.sidebar {
+  border-right: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, var(--bg-2), var(--bg));
+  padding: 18px 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 4px 4px;
+}
+.brand-mark {
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  background: var(--text);
+  color: var(--bg);
+  display: grid; place-items: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  font-size: 18px;
+}
+.brand-mark img { width: 22px; height: 22px; object-fit: contain; filter: invert(1); }
+[data-theme="light"] .brand-mark img { filter: none; }
+
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 15px;
+}
+.brand-sub {
+  font-size: 10.5px;
+  color: var(--text-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspace-switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.workspace-switch:hover { background: var(--surface-hover); }
+.workspace-avatar {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  display: grid; place-items: center;
+  font-weight: 700;
+  font-size: 10.5px;
+  color: var(--accent-ink);
+}
+.workspace-info { flex: 1; min-width: 0; }
+.workspace-name {
+  font-weight: 600; font-size: 12.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.workspace-role { font-size: 10.5px; color: var(--text-3); }
+.workspace-chev { color: var(--text-3); flex-shrink: 0; }
+
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  gap: 2px;
+}
+.seg button {
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  transition: all 0.15s;
+}
+.seg button.active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-4);
+  padding: 6px 10px 4px;
+  font-weight: 600;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.12s;
+  position: relative;
+  font-weight: 500;
+}
+.nav-item:hover { background: var(--surface); color: var(--text); }
+.nav-item.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 8px; bottom: 8px;
+  width: 2px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.nav-item .nav-icon {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.nav-item.active .nav-icon { color: var(--accent); }
+.nav-item .nav-badge {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.nav-item.active .nav-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.plan-usage {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--text-3);
+  margin-bottom: 6px;
+}
+.usage-bar {
+  height: 4px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.usage-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  border-radius: 99px;
+}
+
+/* ============ Topbar ============ */
+.topbar {
+  height: var(--topbar-h);
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg);
+  position: sticky; top: 0; z-index: 10;
+  backdrop-filter: blur(12px);
+}
+.topbar .crumbs {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-3);
+}
+.crumbs strong {
+  color: var(--text); font-weight: 600;
+}
+.crumb-sep { color: var(--text-4); }
+
+.topbar .spacer { flex: 1; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.pill .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+}
+.pill.success .dot { background: var(--success); }
+.pill.live .dot {
+  background: var(--success);
+  box-shadow: 0 0 0 3px oklch(0.78 0.13 155 / 0.2);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 0 oklch(0.78 0.13 155 / 0.4); }
+  50%     { box-shadow: 0 0 0 5px oklch(0.78 0.13 155 / 0); }
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  transition: all 0.15s;
+}
+.btn:hover { background: var(--surface-hover); }
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; }
+.btn.icon { width: 32px; padding: 0; justify-content: center; }
+
+.search {
+  display: flex; align-items: center; gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  min-width: 280px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.search:hover { background: var(--surface-hover); }
+.search kbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-3);
+  background: var(--bg);
+}
+
+/* ============ Content ============ */
+.main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.page {
+  padding: 28px 32px 80px;
+  max-width: 1600px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.page-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+.page-sub {
+  font-size: 13px;
+  color: var(--text-3);
+}
+.page-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ============ Cards & metrics ============ */
+.card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.card-title {
+  font-weight: 600; font-size: 13.5px;
+  letter-spacing: -0.01em;
+}
+.card-sub { font-size: 11.5px; color: var(--text-3); }
+.card-body { padding: 18px; }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.kpi-grid.compact {
+  grid-template-columns: repeat(3, 1fr);
+}
+.kpi {
+  padding: 16px 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.kpi:hover { border-color: var(--border); transform: translateY(-1px); }
+.kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.kpi-label .trend {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  letter-spacing: 0;
+}
+.trend.up { color: var(--success); background: oklch(0.78 0.13 155 / 0.12); }
+.trend.down { color: var(--danger); background: oklch(0.68 0.17 25 / 0.12); }
+.trend.flat { color: var(--text-3); background: var(--surface-2); }
+.kpi-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  display: flex; align-items: baseline; gap: 4px;
+}
+.kpi-value .unit {
+  font-size: 14px;
+  color: var(--text-3);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.kpi-foot {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* Sparkline */
+.spark { position: absolute; inset: auto 0 0 0; height: 34px; pointer-events: none; opacity: 0.8; }
+
+/* ============ Charts ============ */
+.chart-wrap { position: relative; }
+.chart-legend {
+  display: flex; gap: 14px; font-size: 11.5px; color: var(--text-3);
+  align-items: center;
+}
+.chart-legend .lg { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend .sw {
+  width: 10px; height: 3px; border-radius: 2px; background: currentColor;
+}
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 2px;
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0 18px;
+}
+.tab {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+/* Chip row filters */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.chip:hover { background: var(--surface-hover); color: var(--text); }
+.chip.active {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.chip .count { color: var(--text-4); font-family: var(--font-mono); font-size: 10.5px; }
+.chip.active .count { color: var(--accent); opacity: 0.7; }
+
+/* Tables */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+table.data thead th {
+  text-align: left;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-2);
+}
+table.data tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-2);
+  vertical-align: middle;
+}
+table.data tbody tr { transition: background 0.12s; }
+table.data tbody tr:hover { background: var(--surface-2); }
+table.data tbody tr:last-child td { border-bottom: 0; }
+table.data td strong { color: var(--text); font-weight: 600; }
+
+/* Avatar */
+.av {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: inline-grid; place-items: center;
+  font-size: 10px; font-weight: 700;
+  color: var(--accent-ink);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  flex-shrink: 0;
+}
+.av.md { width: 32px; height: 32px; font-size: 12px; border-radius: 8px; }
+.av.lg { width: 40px; height: 40px; font-size: 14px; border-radius: 10px; }
+.av-stack { display: inline-flex; }
+.av-stack .av { border: 2px solid var(--surface); margin-left: -6px; }
+.av-stack .av:first-child { margin-left: 0; }
+.av-colors-1 { background: linear-gradient(135deg, oklch(0.7 0.14 260), oklch(0.75 0.12 290)); color: white; }
+.av-colors-2 { background: linear-gradient(135deg, oklch(0.7 0.14 160), oklch(0.75 0.12 190)); color: white; }
+.av-colors-3 { background: linear-gradient(135deg, oklch(0.7 0.14 20), oklch(0.75 0.12 50)); color: white; }
+.av-colors-4 { background: linear-gradient(135deg, oklch(0.6 0.12 320), oklch(0.7 0.10 350)); color: white; }
+
+.status-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.status-dot.ok { background: var(--success); }
+.status-dot.warn { background: var(--accent); }
+.status-dot.bad { background: var(--danger); }
+.status-dot.off { background: var(--text-4); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--border-soft);
+}
+.tag.accent { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-border); }
+.tag.success { background: oklch(0.78 0.13 155 / 0.12); color: var(--success); border-color: oklch(0.78 0.13 155 / 0.3); }
+.tag.danger { background: oklch(0.68 0.17 25 / 0.12); color: var(--danger); border-color: oklch(0.68 0.17 25 / 0.3); }
+
+/* Grids */
+.grid { display: grid; gap: 16px; }
+.g-2 { grid-template-columns: 1fr 1fr; }
+.g-3 { grid-template-columns: repeat(3, 1fr); }
+.g-2-1 { grid-template-columns: 2fr 1fr; }
+.g-1-2 { grid-template-columns: 1fr 2fr; }
+
+/* SVG chart helpers */
+.axis text { font-size: 10px; fill: var(--text-4); font-family: var(--font-mono); }
+.axis line, .axis path { stroke: var(--border-soft); }
+.grid-line { stroke: var(--border-soft); stroke-dasharray: 2 4; }
+
+/* Timeline */
+.tl { display: flex; flex-direction: column; }
+.tl-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.tl-row:last-child { border-bottom: 0; }
+.tl-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  padding-top: 1px;
+}
+.tl-body { font-size: 12.5px; color: var(--text-2); }
+.tl-body strong { color: var(--text); font-weight: 600; }
+
+/* Progress */
+.progress {
+  height: 6px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+  display: flex;
+}
+.progress > div { height: 100%; }
+.progress .p-accent { background: var(--accent); }
+.progress .p-success { background: var(--success); }
+.progress .p-info { background: var(--info); }
+
+/* ============ Edit mode (Vue Agence) ============ */
+.editable {
+  position: relative;
+  cursor: text;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  outline: 1px dashed var(--accent-border);
+  outline-offset: 2px;
+  transition: background 0.15s, outline-color 0.15s;
+}
+.editable:hover { background: var(--accent-soft); outline-color: var(--accent); }
+.editable.editing { background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: 2px; }
+.editable:focus { outline: 1px solid var(--accent); }
+
+.edit-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-size: 12.5px;
+}
+.edit-banner strong { color: var(--text); font-weight: 600; }
+.edit-banner > span { flex: 1; color: var(--text-2); }
+.btn.small { height: 26px; padding: 0 10px; font-size: 11.5px; }
+
+/* Kanban */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(240px, 1fr));
+  gap: 14px;
+  overflow-x: auto;
+}
+.kb-col {
+  background: var(--bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+  padding: 12px;
+  min-width: 240px;
+}
+.kb-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.kb-title {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+}
+.kb-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-4); }
+.kb-card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: grab;
+  transition: all 0.15s;
+  box-shadow: var(--shadow-1);
+}
+.kb-card:hover { border-color: var(--border); transform: translateY(-1px); }
+.kb-card-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.kb-card-sub { font-size: 11.5px; color: var(--text-3); margin-bottom: 10px; }
+.kb-card-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.kb-card-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Activity log */
+.act-row {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+  align-items: start;
+}
+.act-row:last-child { border-bottom: 0; }
+.act-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  margin-top: 6px;
+  margin-left: 10px;
+  position: relative;
+}
+.act-dot::after {
+  content: "";
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  top: 14px; width: 1px; height: 40px;
+  background: var(--border-soft);
+}
+.act-row:last-child .act-dot::after { display: none; }
+.act-time {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-4);
+  white-space: nowrap;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 99px;
+  border: 3px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-4); }
+
+/* Anim */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.4s ease both; }
+
+/* Utility */
+.hr { height: 1px; background: var(--border-soft); margin: 16px 0; }
+.muted { color: var(--text-3); }
+.small { font-size: 11.5px; }
+.stack-xs { display: flex; flex-direction: column; gap: 4px; }
+.stack-sm { display: flex; flex-direction: column; gap: 8px; }
+.stack-md { display: flex; flex-direction: column; gap: 14px; }
+.stack-lg { display: flex; flex-direction: column; gap: 20px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.between { justify-content: space-between; }
+.row.wrap { flex-wrap: wrap; }
+
+/* Hero panel (accent) */
+.hero-panel {
+  border: 1px solid var(--accent-border);
+  background:
+    radial-gradient(800px 200px at 90% 0%, oklch(0.74 0.155 55 / 0.18), transparent 60%),
+    linear-gradient(180deg, var(--accent-soft), transparent 80%),
+    var(--surface);
+  border-radius: var(--r-lg);
+  padding: 20px 22px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px;
+}
+.hero-panel .hp-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.hero-panel .hp-sub { font-size: 12.5px; color: var(--text-2); max-width: 60ch; }
+
+/* Empty state, code */
+code.code {
+  font-family: var(--font-mono); font-size: 11.5px;
+  padding: 1px 6px; border-radius: 4px;
+  background: var(--bg-2); border: 1px solid var(--border-soft);
+  color: var(--text-2);
+}
+
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script type="text/babel" data-presets="env,react">
+/* Icons — thin 1.5 stroke, minimal, custom */
+const Icon = ({ name, size = 16, className = "" }) => {
+  const paths = {
+    overview: <><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></>,
+    acquisition: <><path d="M3 12h4l3-8 4 16 3-8h4"/></>,
+    sales: <><path d="M3 7h18M3 12h12M3 17h6"/></>,
+    pipeline: <><path d="M4 5h16l-6 8v6l-4-2v-4z"/></>,
+    ai: <><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></>,
+    customers: <><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-3.5 3.2-6 6.5-6s6 2.5 6.5 6"/><circle cx="17" cy="6" r="2.5"/><path d="M15 12.5c2.5 0 5 1.5 6 4.5"/></>,
+    automations: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><rect x="8" y="8" width="8" height="8" rx="2"/></>,
+    integrations: <><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></>,
+    team: <><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2 20c.5-3 2.8-5 6-5s5.5 2 6 5M14 20c.5-2 2-3 4-3s3.5 1 4 3"/></>,
+    settings: <><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></>,
+    search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></>,
+    bell: <><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16z"/><path d="M10 20c.5 1 1.2 1.5 2 1.5s1.5-.5 2-1.5"/></>,
+    plus: <><path d="M12 5v14M5 12h14"/></>,
+    chev: <><path d="m9 6 6 6-6 6"/></>,
+    chevDown: <><path d="m6 9 6 6 6-6"/></>,
+    filter: <><path d="M4 5h16l-6 8v6l-4-2v-4z"/></>,
+    download: <><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></>,
+    share: <><circle cx="6" cy="12" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="m8 11 8-4M8 13l8 4"/></>,
+    more: <><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></>,
+    up: <><path d="m6 15 6-6 6 6"/></>,
+    check: <><path d="m5 12 5 5 9-12"/></>,
+    edit: <><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></>,
+    save: <><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></>,
+    external: <><path d="M10 4H5v15h15v-5M15 3h6v6M21 3 10 14"/></>,
+    sparkles: <><path d="M12 3v4M12 17v4M5 12H1M23 12h-4M7 7 4.5 4.5M19.5 19.5 17 17M17 7l2.5-2.5M4.5 19.5 7 17"/></>,
+    refresh: <><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></>,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></>,
+    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></>,
+    moon: <><path d="M20 14.5A8 8 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></>,
+    eye: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></>,
+    zap: <><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></>,
+    inbox: <><path d="M22 12h-6l-2 3h-4l-2-3H2M5 4h14l3 8v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7z"/></>,
+    play: <><path d="M6 4v16l14-8z"/></>,
+    pause: <><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></>,
+    arrow: <><path d="M5 12h14M13 5l7 7-7 7"/></>,
+    target: <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></>,
+    globe: <><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></>,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {paths[name]}
+    </svg>
+  );
+};
+
+window.Icon = Icon;
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+/* Reusable chart primitives — pure SVG */
+
+const CHART_COLORS = {
+  primary: "var(--accent)",
+  secondary: "var(--accent-2)",
+  success: "var(--success)",
+  info: "var(--info)",
+  muted: "var(--text-3)",
+};
+
+/* ---------- LineChart ---------- */
+function LineChart({ data, series, height = 300, yFormat = (v) => v, xLabels, dualAxis = false }) {
+  const ref = React.useRef(null);
+  const [w, setW] = React.useState(800);
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const padL = dualAxis ? 56 : 48, padR = dualAxis ? 56 : 16, padT = 16, padB = 30;
+  const iw = Math.max(100, w - padL - padR);
+  const ih = height - padT - padB;
+  const n = data.length;
+
+  // compute series ranges
+  const vals1 = series.filter(s => !s.rightAxis).flatMap(s => data.map(d => d[s.key]));
+  const vals2 = series.filter(s => s.rightAxis).flatMap(s => data.map(d => d[s.key]));
+  const [min1, max1] = niceRange(vals1);
+  const [min2, max2] = vals2.length ? niceRange(vals2) : [0, 1];
+
+  const x = (i) => padL + (i / Math.max(1, n - 1)) * iw;
+  const y1 = (v) => padT + ih - ((v - min1) / Math.max(1e-9, max1 - min1)) * ih;
+  const y2 = (v) => padT + ih - ((v - min2) / Math.max(1e-9, max2 - min2)) * ih;
+
+  const ticks = 5;
+  const yTicks1 = Array.from({ length: ticks + 1 }, (_, i) => min1 + (i / ticks) * (max1 - min1));
+
+  const [hover, setHover] = React.useState(null);
+
+  return (
+    <div ref={ref} style={{ width: "100%", position: "relative" }}>
+      <svg width={w} height={height} style={{ display: "block" }}
+           onMouseLeave={() => setHover(null)}
+           onMouseMove={(e) => {
+             const r = e.currentTarget.getBoundingClientRect();
+             const px = e.clientX - r.left;
+             const idx = Math.round(((px - padL) / iw) * (n - 1));
+             if (idx >= 0 && idx < n) setHover(idx);
+           }}>
+        <defs>
+          {series.map((s, i) => (
+            <linearGradient key={i} id={`lg-${s.key}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={s.color} stopOpacity="0.22" />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+            </linearGradient>
+          ))}
+        </defs>
+        {/* grid */}
+        {yTicks1.map((t, i) => (
+          <g key={i}>
+            <line className="grid-line" x1={padL} x2={padL + iw} y1={y1(t)} y2={y1(t)} />
+            <text x={padL - 8} y={y1(t) + 3} textAnchor="end"
+                  style={{ fontSize: 10, fill: "var(--text-4)", fontFamily: "var(--font-mono)" }}>
+              {yFormat(t)}
+            </text>
+          </g>
+        ))}
+        {dualAxis && Array.from({ length: ticks + 1 }, (_, i) => {
+          const t = min2 + (i / ticks) * (max2 - min2);
+          return (
+            <text key={i} x={padL + iw + 8} y={y2(t) + 3} textAnchor="start"
+                  style={{ fontSize: 10, fill: "var(--text-4)", fontFamily: "var(--font-mono)" }}>
+              {(series.find(s => s.rightAxis)?.rightFormat || ((v) => Math.round(v)))(t)}
+            </text>
+          );
+        })}
+        {/* x labels */}
+        {xLabels && xLabels.map((lbl, i) => (
+          <text key={i} x={x(i)} y={height - 10} textAnchor="middle"
+                style={{ fontSize: 10, fill: "var(--text-4)", fontFamily: "var(--font-mono)" }}>
+            {lbl}
+          </text>
+        ))}
+        {/* areas + lines */}
+        {series.map((s, si) => {
+          const ys = s.rightAxis ? y2 : y1;
+          const pts = data.map((d, i) => [x(i), ys(d[s.key])]);
+          const path = smoothPath(pts);
+          const area = `${path} L ${x(n - 1)} ${padT + ih} L ${padL} ${padT + ih} Z`;
+          return (
+            <g key={si}>
+              {!s.dashed && (
+                <path d={area} fill={`url(#lg-${s.key})`} />
+              )}
+              <path d={path} fill="none" stroke={s.color} strokeWidth="2"
+                    strokeDasharray={s.dashed ? "4 4" : "none"}
+                    strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+          );
+        })}
+        {/* hover line + dots */}
+        {hover !== null && (
+          <g>
+            <line x1={x(hover)} x2={x(hover)} y1={padT} y2={padT + ih}
+                  stroke="var(--text-3)" strokeDasharray="2 3" strokeWidth="1" opacity="0.6" />
+            {series.map((s, i) => {
+              const ys = s.rightAxis ? y2 : y1;
+              return (
+                <circle key={i} cx={x(hover)} cy={ys(data[hover][s.key])} r="4"
+                        fill="var(--bg)" stroke={s.color} strokeWidth="2" />
+              );
+            })}
+          </g>
+        )}
+      </svg>
+      {hover !== null && (
+        <div style={{
+          position: "absolute",
+          left: Math.min(Math.max(x(hover) - 90, 8), w - 188),
+          top: 8,
+          background: "var(--bg-2)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          padding: "8px 10px",
+          fontSize: 11.5,
+          boxShadow: "var(--shadow-2)",
+          pointerEvents: "none",
+          minWidth: 180,
+        }}>
+          <div style={{ color: "var(--text-3)", marginBottom: 6, fontFamily: "var(--font-mono)", fontSize: 10.5 }}>
+            {xLabels ? xLabels[hover] : ""}
+          </div>
+          {series.map((s, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 2 }}>
+              <span style={{ color: "var(--text-2)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color }}></span>
+                {s.label}
+              </span>
+              <span className="mono" style={{ color: "var(--text)", fontWeight: 600 }}>
+                {(s.fmt || yFormat)(data[hover][s.key])}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function smoothPath(pts) {
+  if (pts.length < 2) return "";
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const cx = (x0 + x1) / 2;
+    d += ` C ${cx} ${y0}, ${cx} ${y1}, ${x1} ${y1}`;
+  }
+  return d;
+}
+
+function niceRange(vals) {
+  if (!vals.length) return [0, 1];
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (min === max) { max = min + 1; }
+  const span = max - min;
+  const pad = span * 0.12;
+  min = Math.max(0, min - pad);
+  max = max + pad;
+  return [min, max];
+}
+
+/* ---------- BarChart (stacked or grouped) ---------- */
+function BarChart({ data, series, height = 260, xLabels, yFormat = (v) => v, stacked = true }) {
+  const ref = React.useRef(null);
+  const [w, setW] = React.useState(600);
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const padL = 42, padR = 12, padT = 12, padB = 28;
+  const iw = Math.max(80, w - padL - padR);
+  const ih = height - padT - padB;
+  const n = data.length;
+
+  const totals = data.map(d => series.reduce((s, k) => s + (d[k.key] || 0), stacked ? 0 : 0));
+  const max = stacked
+    ? Math.max(...totals) * 1.1
+    : Math.max(...data.flatMap(d => series.map(s => d[s.key]))) * 1.1;
+
+  const bw = (iw / n) * 0.62;
+  const gap = (iw / n) - bw;
+
+  return (
+    <div ref={ref} style={{ width: "100%" }}>
+      <svg width={w} height={height} style={{ display: "block" }}>
+        {Array.from({ length: 5 }, (_, i) => {
+          const t = (i / 4) * max;
+          const y = padT + ih - (t / max) * ih;
+          return (
+            <g key={i}>
+              <line className="grid-line" x1={padL} x2={padL + iw} y1={y} y2={y} />
+              <text x={padL - 8} y={y + 3} textAnchor="end"
+                    style={{ fontSize: 10, fill: "var(--text-4)", fontFamily: "var(--font-mono)" }}>
+                {yFormat(t)}
+              </text>
+            </g>
+          );
+        })}
+        {data.map((d, i) => {
+          const cx = padL + gap / 2 + i * (iw / n);
+          if (stacked) {
+            let acc = 0;
+            return (
+              <g key={i}>
+                {series.map((s, si) => {
+                  const v = d[s.key] || 0;
+                  const h = (v / max) * ih;
+                  const y = padT + ih - acc - h;
+                  acc += h;
+                  return (
+                    <rect key={si} x={cx} y={y} width={bw} height={h}
+                          fill={s.color} rx={si === series.length - 1 ? 3 : 0}
+                          style={{ opacity: 0.92 }} />
+                  );
+                })}
+                {xLabels && (
+                  <text x={cx + bw / 2} y={height - 10} textAnchor="middle"
+                        style={{ fontSize: 10, fill: "var(--text-4)", fontFamily: "var(--font-mono)" }}>
+                    {xLabels[i]}
+                  </text>
+                )}
+              </g>
+            );
+          } else {
+            const sw = bw / series.length;
+            return (
+              <g key={i}>
+                {series.map((s, si) => {
+                  const v = d[s.key] || 0;
+                  const h = (v / max) * ih;
+                  return (
+                    <rect key={si} x={cx + si * sw} y={padT + ih - h} width={sw - 2} height={h}
+                          fill={s.color} rx={2} />
+                  );
+                })}
+              </g>
+            );
+          }
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/* ---------- Sparkline ---------- */
+function Sparkline({ data, color = "var(--accent)", height = 36, stroke = 1.5, fill = true }) {
+  const ref = React.useRef(null);
+  const [w, setW] = React.useState(100);
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+  const min = Math.min(...data), max = Math.max(...data);
+  const span = max - min || 1;
+  const pts = data.map((v, i) => [
+    (i / (data.length - 1)) * w,
+    height - 2 - ((v - min) / span) * (height - 4)
+  ]);
+  const path = smoothPath(pts);
+  const id = React.useId();
+  return (
+    <div ref={ref} style={{ width: "100%", height }}>
+      <svg width={w} height={height} style={{ display: "block" }}>
+        {fill && (
+          <>
+            <defs>
+              <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+                <stop offset="100%" stopColor={color} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={`${path} L ${w} ${height} L 0 ${height} Z`} fill={`url(#${id})`} />
+          </>
+        )}
+        <path d={path} fill="none" stroke={color} strokeWidth={stroke}
+              strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}
+
+/* ---------- DonutChart ---------- */
+function DonutChart({ data, size = 180, thickness = 18 }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  const r = (size - thickness) / 2;
+  const c = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <div style={{ position: "relative", width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r}
+                fill="none" stroke="var(--surface-2)" strokeWidth={thickness} />
+        {data.map((d, i) => {
+          const frac = d.value / total;
+          const dash = frac * c;
+          const el = (
+            <circle key={i} cx={size / 2} cy={size / 2} r={r}
+                    fill="none" stroke={d.color} strokeWidth={thickness}
+                    strokeDasharray={`${dash} ${c}`}
+                    strokeDashoffset={-offset}
+                    strokeLinecap="butt" />
+          );
+          offset += dash;
+          return el;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+Object.assign(window, { LineChart, BarChart, Sparkline, DonutChart, CHART_COLORS });
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+/* EditableText — inline editable field that activates only when editing context is on. */
+
+// Ensure EditContext exists before app.jsx loads. Namespaced to avoid clash with native browser EditContext API.
+window.__HelpAi_EditContext = window.__HelpAi_EditContext || React.createContext({ editing: false });
+
+function EditableText({ value, tag = "span", className = "", style = {}, multiline = false, onCommit, editing: forcedEditing, placeholder = "" }) {
+  const ctx = React.useContext(window.__HelpAi_EditContext);
+  const editing = forcedEditing !== undefined ? forcedEditing : (ctx && ctx.editing);
+  const [val, setVal] = React.useState(value);
+  const [active, setActive] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => { setVal(value); }, [value]);
+
+  React.useEffect(() => {
+    if (active && ref.current) {
+      ref.current.focus();
+      // place cursor at end
+      const el = ref.current;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }, [active]);
+
+  const Tag = tag;
+
+  if (!editing) {
+    return <Tag className={className} style={style}>{val || placeholder}</Tag>;
+  }
+
+  const commit = () => {
+    setActive(false);
+    const next = ref.current ? ref.current.innerText.trim() : val;
+    setVal(next);
+    onCommit && onCommit(next);
+  };
+
+  return (
+    <Tag
+      ref={ref}
+      className={className + " editable" + (active ? " editing" : "")}
+      style={style}
+      contentEditable={true}
+      suppressContentEditableWarning={true}
+      onFocus={() => setActive(true)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (!multiline && e.key === "Enter") { e.preventDefault(); ref.current.blur(); }
+        if (e.key === "Escape") { ref.current.innerText = val; ref.current.blur(); }
+      }}
+    >
+      {val}
+    </Tag>
+  );
+}
+
+window.EditableText = EditableText;
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+
+/* Supabase client + real data loader */
+
+const SUPABASE_URL  = 'https://wodlupbffooqtshgasml.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvZGx1cGJmZm9vcXRzaGdhc21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzkwODQsImV4cCI6MjA4ODk1NTA4NH0.cpimdDxESdrsdOH2CtPSamgzATDiss3eTogf5s5IFy4';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+window.sb = sb;
+
+/* ----- helpers ----- */
+const MONTH_ABBR = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+const MONTH_SHORT = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+function fmtMonthLabel(d) {
+  return MONTH_SHORT[d.getMonth()] + " " + String(d.getFullYear()).slice(2);
+}
+function fmtEur(centimes) {
+  const v = Math.round((centimes || 0) / 100);
+  return v.toLocaleString("fr-FR");
+}
+function buildMonths(n=12) {
+  const arr = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    arr.push({ d, key: d.toISOString().slice(0,7), label: fmtMonthLabel(d) });
+  }
+  return arr;
+}
+function timeAgo(iso) {
+  if (!iso) return "—";
+  const delta = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (delta < 60)    return "il y a " + delta + "s";
+  if (delta < 3600)  return "il y a " + Math.floor(delta/60) + " min";
+  if (delta < 86400) return "il y a " + Math.floor(delta/3600) + "h";
+  const days = Math.floor(delta/86400);
+  if (days < 30) return "il y a " + days + "j";
+  return new Date(iso).toLocaleDateString("fr-FR");
+}
+function pct(a, b) {
+  if (!b) return 0;
+  return Math.round(((a - b) / b) * 1000) / 10;
+}
+function trendStr(delta) {
+  if (delta > 0) return { trend: "+" + delta + "%", dir: "up" };
+  if (delta < 0) return { trend: delta + "%", dir: "down" };
+  return { trend: "stable", dir: "flat" };
+}
+function initials(s) {
+  if (!s) return "??";
+  return s.split(/\s+/).filter(Boolean).map(x => x[0]).slice(0,2).join("").toUpperCase();
+}
+
+/* ----- loadAllData({isAdmin, clientId}) ----- */
+async function loadAllData({ isAdmin, clientId }) {
+  const monthsArr = buildMonths(12);
+  const MONTHS = monthsArr.map(m => m.label);
+
+  const clientFilter = isAdmin ? null : clientId;
+
+  /* agency_clients */
+  let qc = sb.from('agency_clients').select('*');
+  if (clientFilter) qc = qc.eq('id', clientFilter);
+  const { data: clientsRows = [] } = await qc;
+
+  /* agency_leads */
+  let ql = sb.from('agency_leads').select('*').order('created_at', { ascending: false }).limit(500);
+  if (clientFilter) ql = ql.eq('client_id', clientFilter);
+  const { data: leadsRows = [] } = await ql;
+
+  /* agency_kpis */
+  let qk = sb.from('agency_kpis').select('*');
+  if (clientFilter) qk = qk.eq('client_id', clientFilter);
+  const { data: kpisRows = [] } = await qk;
+
+  /* agency_invoices (admin only for overview) */
+  let invRows = [];
+  if (isAdmin) {
+    const { data } = await sb.from('agency_invoices').select('*').order('created_at', { ascending: false }).limit(200);
+    invRows = data || [];
+  } else if (clientFilter) {
+    const { data } = await sb.from('agency_invoices').select('*').eq('client_id', clientFilter).order('created_at', { ascending: false });
+    invRows = data || [];
+  }
+
+  /* agency_gmb_stats (all or scoped) */
+  let gmbRows = [];
+  try {
+    let qg = sb.from('agency_gmb_stats').select('*');
+    if (clientFilter) qg = qg.eq('agency_client_id', clientFilter);
+    const { data } = await qg;
+    gmbRows = data || [];
+  } catch (e) { gmbRows = []; }
+
+  /* KPIs cumulés : filtrer source='total' */
+  const totals = kpisRows.filter(k => k.source === 'total');
+  const totalByMonth = {};
+  totals.forEach(k => {
+    const key = (k.periode || '').slice(0,7);
+    if (!totalByMonth[key]) totalByMonth[key] = { nb_leads:0, depense:0, ca_genere:0, deals:0, roas:0, cout_par_lead:0, panier_moyen:0, note_google:0, nb_avis_google:0, taux_rdv:0, leads_ref:0, pipeline:0 };
+    const t = totalByMonth[key];
+    t.nb_leads += k.nb_leads || 0;
+    t.depense += k.depense || 0;
+    t.ca_genere += k.ca_genere || 0;
+    t.deals += k.deals || 0;
+    t.roas = Math.max(t.roas, Number(k.roas) || 0);
+    t.cout_par_lead = Math.max(t.cout_par_lead, k.cout_par_lead || 0);
+    t.panier_moyen = Math.max(t.panier_moyen, k.panier_moyen || 0);
+    t.note_google = Math.max(t.note_google, Number(k.note_google) || 0);
+    t.nb_avis_google = Math.max(t.nb_avis_google, k.nb_avis_google || 0);
+    t.taux_rdv = Math.max(t.taux_rdv, Number(k.taux_rdv) || 0);
+    t.leads_ref = (t.leads_ref || 0) + (k.leads_ref || 0);
+    t.pipeline = Math.max(t.pipeline, k.pipeline || 0);
+  });
+
+  /* REVENUE_DATA */
+  const REVENUE_DATA = monthsArr.map(m => {
+    const t = totalByMonth[m.key] || {};
+    const ca = (t.ca_genere || 0) / 100;
+    return { m: m.label, ca, ads: (t.depense || 0) / 100, goal: Math.round(ca * 1.1) };
+  });
+
+  /* LEADS_DATA: ads = google_ads + meta, organic = gmb + site, referral = autre */
+  const leadsByMonthSource = {};
+  kpisRows.filter(k => k.source !== 'total').forEach(k => {
+    const key = (k.periode || '').slice(0,7);
+    if (!leadsByMonthSource[key]) leadsByMonthSource[key] = {};
+    leadsByMonthSource[key][k.source] = (leadsByMonthSource[key][k.source] || 0) + (k.nb_leads || 0);
+  });
+  const LEADS_DATA = monthsArr.map(m => {
+    const src = leadsByMonthSource[m.key] || {};
+    return {
+      m: m.label,
+      ads: (src.google_ads || 0) + (src.meta || 0),
+      organic: (src.gmb || 0) + (src.site || 0),
+      referral: (src.autre || 0),
+    };
+  });
+
+  /* ROAS_DATA */
+  const ROAS_DATA = monthsArr.map(m => {
+    const t = totalByMonth[m.key] || {};
+    return {
+      m: m.label,
+      roas: Number(t.roas) || 0,
+      cpl: (t.cout_par_lead || 0) / 100,
+    };
+  });
+
+  /* KPIs (6 cards) — current month totals + spark on 12 months */
+  const lastIdx = monthsArr.length - 1;
+  const curKey = monthsArr[lastIdx].key;
+  const cur = totalByMonth[curKey] || {};
+  const prev = totalByMonth[monthsArr[Math.max(0,lastIdx-1)].key] || {};
+
+  const totalCa = totals.reduce((s, k) => s + (k.ca_genere || 0), 0) / 100;
+  const totalLeads = totals.reduce((s, k) => s + (k.nb_leads || 0), 0);
+  const totalDepense = totals.reduce((s, k) => s + (k.depense || 0), 0) / 100;
+  const totalDeals = totals.reduce((s, k) => s + (k.deals || 0), 0);
+  const avgCpl = totalLeads > 0 ? Math.round(totalDepense / totalLeads) : 0;
+  const avgRoas = totalDepense > 0 ? (totalCa / totalDepense) : 0;
+  const coutDeal = totalDeals > 0 ? Math.round(totalDepense / totalDeals) : 0;
+
+  const sparkCA = REVENUE_DATA.map(d => Math.max(1, d.ca / 1000));
+  const sparkLeads = LEADS_DATA.map(d => Math.max(1, d.ads + d.organic + d.referral));
+  const sparkCpl = ROAS_DATA.map(d => Math.max(1, d.cpl || 1));
+  const sparkRoas = ROAS_DATA.map(d => Math.max(0.1, d.roas || 0.1));
+  const sparkDeals = monthsArr.map(m => (totalByMonth[m.key]||{}).deals || 0).map(v => Math.max(1, v));
+
+  const KPIS = [
+    { label: "CA total", value: totalCa.toLocaleString("fr-FR"), unit: "€",
+      ...trendStr(pct(cur.ca_genere||0, prev.ca_genere||0)), spark: sparkCA },
+    { label: "Leads total", value: totalLeads.toLocaleString("fr-FR"),
+      ...trendStr(pct(cur.nb_leads||0, prev.nb_leads||0)), spark: sparkLeads },
+    { label: "CPL moyen", value: avgCpl.toLocaleString("fr-FR"), unit: "€",
+      ...(() => { const d = pct(prev.cout_par_lead||0, cur.cout_par_lead||0); return { trend: (d>=0?"+":"") + d + "%", dir: d>=0?"up":"down"}; })(),
+      spark: sparkCpl },
+    { label: "ROAS cumulé", value: avgRoas.toFixed(2), unit: "x",
+      ...trendStr(pct(cur.roas||0, prev.roas||0)), spark: sparkRoas },
+    { label: "Deals signés", value: totalDeals.toLocaleString("fr-FR"),
+      ...trendStr(pct(cur.deals||0, prev.deals||0)), spark: sparkDeals },
+    { label: "Coût par deal", value: coutDeal.toLocaleString("fr-FR"), unit: "€",
+      trend: "—", dir: "flat", spark: sparkDeals },
+  ];
+
+  /* KPIS_B (secondary row) */
+  const noShow = cur.taux_rdv ? Math.max(0, 100 - Number(cur.taux_rdv)) : 0;
+  const pipeline = cur.pipeline || 0;
+  const noteMoy = cur.note_google || 0;
+  const nbAvis = cur.nb_avis_google || 0;
+  const contratsActifs = clientsRows.filter(c => c.statut === 'actif').length;
+
+  const KPIS_B = [
+    { label: "No-show rate", value: noShow.toFixed(1), unit: "%", trend: "—", dir: "flat" },
+    { label: "Pipeline en cours", value: String(pipeline), unit: "devis", trend: "—", dir: "flat" },
+    { label: "Note moyenne", value: noteMoy ? Number(noteMoy).toFixed(1) : "—", unit: "/5", trend: nbAvis + " avis", dir: "flat" },
+    { label: "Contrats actifs", value: String(contratsActifs), trend: "—", dir: "flat" },
+    { label: "Tâches IA", value: "—", trend: "—", dir: "flat" },
+  ];
+
+  /* PIPELINE — bucket agency_leads by statut into kanban columns */
+  const statutMap = {
+    'nouveau':  'Nouveau',
+    'contacté': 'Qualifié',
+    'contacte': 'Qualifié',
+    'qualifié': 'Devis envoyé',
+    'qualifie': 'Devis envoyé',
+    'gagné':    'Gagné',
+    'gagne':    'Gagné',
+  };
+  const PIPELINE = { "Nouveau": [], "Qualifié": [], "Devis envoyé": [], "Négociation": [], "Gagné": [] };
+  leadsRows.slice(0, 30).forEach(l => {
+    const col = statutMap[(l.statut || '').toLowerCase()] || 'Nouveau';
+    const clientName = (clientsRows.find(c => c.id === l.client_id) || {}).nom || l.nom || 'Lead';
+    PIPELINE[col].push({
+      name: clientName,
+      value: (l.metadata && l.metadata.montant ? Math.round(l.metadata.montant/100) : 0).toLocaleString("fr-FR") + " €",
+      source: ({ 'google_ads':'Google', 'meta':'Meta Ads', 'gmb':'GMB', 'site':'Organique', 'autre':'Referral' })[l.source] || (l.source || '—'),
+      owner: initials(l.nom || ''),
+      hot: l.statut === 'qualifié',
+      age: timeAgo(l.created_at),
+    });
+  });
+
+  /* CUSTOMERS (portfolio admin + single-client for client view) */
+  const CUSTOMERS = clientsRows.map(c => {
+    const lastInv = invRows.find(i => i.client_id === c.id);
+    const montant = lastInv ? (lastInv.montant / 100).toLocaleString("fr-FR") + " €" : "—";
+    const statut = c.statut === 'actif' ? 'ok' : c.statut === 'pause' ? 'warn' : 'bad';
+    return {
+      name: c.nom || '—',
+      type: c.secteur || 'Standard',
+      value: montant,
+      health: c.statut === 'actif' ? 88 : c.statut === 'pause' ? 60 : 30,
+      status: statut,
+      owner: initials(c.nom || ''),
+      since: c.created_at ? new Date(c.created_at).toLocaleDateString("fr-FR", { month:'short', year:'numeric' }) : "—",
+      next: "—",
+    };
+  });
+
+  /* INTEGRATIONS: derived from what's configured in agency_clients */
+  const hasTg = clientsRows.some(c => c.telegram_notify);
+  const hasStripe = clientsRows.some(c => c.stripe_customer_id);
+  const hasDrive = clientsRows.some(c => c.drive_folder_id);
+  const hasGmb = clientsRows.some(c => c.gmb_client_id);
+  const INTEGRATIONS = [
+    { name: "Supabase",       cat: "Data",          status: "connected",     last: "Temps réel",      events: String(leadsRows.length) + " leads" },
+    { name: "Stripe",         cat: "Paiement",      status: hasStripe ? "connected" : "available", last: hasStripe ? "Actif" : "—", events: String(invRows.length) },
+    { name: "Resend",         cat: "Email",         status: "connected",     last: "Via Edge Function", events: "—" },
+    { name: "Telegram",       cat: "Notifications", status: hasTg ? "connected" : "available", last: hasTg ? "Actif" : "—", events: "—" },
+    { name: "Google Business",cat: "Réputation",    status: hasGmb ? "connected" : "available", last: hasGmb ? "Sync" : "—", events: String(gmbRows.reduce((s,g)=>s+(g.nb_avis||0),0)) + " avis" },
+    { name: "Google Drive",   cat: "Documentation", status: hasDrive ? "connected" : "available", last: hasDrive ? "Actif" : "—", events: "—" },
+    { name: "Google Ads",     cat: "Acquisition",   status: "available",     last: "—", events: "—" },
+    { name: "Meta Ads",       cat: "Acquisition",   status: "available",     last: "—", events: "—" },
+  ];
+
+  /* AUTOMATIONS: empty for now, screen will render the empty table */
+  const AUTOMATIONS = [];
+
+  /* TEAM: empty */
+  const TEAM = [];
+
+  /* ACTIVITY — latest 7 leads as live feed */
+  const React = window.React;
+  const ACTIVITY = leadsRows.slice(0, 7).map(l => {
+    const when = l.created_at ? new Date(l.created_at).toLocaleTimeString("fr-FR", { hour:'2-digit', minute:'2-digit'}) : "--:--";
+    const srcLbl = ({ 'google_ads':'Google Ads', 'meta':'Meta Ads', 'gmb':'GMB', 'site':'Site', 'autre':'Autre', 'appel':'Appel', 'lsa':'LSA' })[l.source] || (l.source || '—');
+    const clientName = (clientsRows.find(c => c.id === l.client_id) || {}).nom || '—';
+    return {
+      time: when,
+      who: clientName,
+      what: React.createElement(React.Fragment, null,
+        "Nouveau lead ",
+        React.createElement("strong", null, l.nom || "Anonyme"),
+        " — ",
+        React.createElement("strong", null, srcLbl)
+      ),
+      tag: srcLbl,
+    };
+  });
+
+  /* CHANNELS: repartition cur-month leads by source (for donut) */
+  const curSourceLeads = kpisRows
+    .filter(k => k.source !== 'total' && (k.periode || '').slice(0,7) === curKey)
+    .reduce((acc, k) => { acc[k.source] = (acc[k.source]||0) + (k.nb_leads||0); return acc; }, {});
+  const curSourceSpend = kpisRows
+    .filter(k => k.source !== 'total' && (k.periode || '').slice(0,7) === curKey)
+    .reduce((acc, k) => { acc[k.source] = (acc[k.source]||0) + (k.depense||0); return acc; }, {});
+  const totalCurLeads = Object.values(curSourceLeads).reduce((s,v) => s+v, 0) || 1;
+  const CHANNELS_RAW = [
+    { src: 'meta',       name: 'Meta Ads',      color: 'oklch(0.74 0.155 55)' },
+    { src: 'google_ads', name: 'Google Ads',    color: 'oklch(0.80 0.120 60)' },
+    { src: 'gmb',        name: 'Organique GMB', color: 'oklch(0.78 0.13 155)' },
+    { src: 'site',       name: 'Site web',      color: 'oklch(0.70 0.12 240)' },
+    { src: 'autre',      name: 'Referral',      color: 'oklch(0.65 0.15 310)' },
+  ];
+  const CHANNELS = CHANNELS_RAW
+    .filter(c => curSourceLeads[c.src])
+    .map(c => ({
+      name: c.name,
+      value: Math.round((curSourceLeads[c.src] / totalCurLeads) * 100),
+      color: c.color,
+      spend: ((curSourceSpend[c.src]||0)/100).toLocaleString("fr-FR") + " €",
+      leads: curSourceLeads[c.src] || 0,
+    }));
+  if (!CHANNELS.length) {
+    CHANNELS.push({ name: "—", value: 100, color: "var(--surface-2)", spend: "0 €", leads: 0 });
+  }
+
+  /* INBOUND_LEADS: last 8 with enriched fields */
+  const statutToLeadStatus = {
+    'nouveau':'new', 'contacté':'contacted', 'contacte':'contacted',
+    'qualifié':'qualified', 'qualifie':'qualified',
+    'gagné':'qualified', 'gagne':'qualified', 'perdu':'nurturing',
+  };
+  const INBOUND_LEADS = leadsRows.slice(0, 12).map(l => {
+    const srcLbl = ({ 'google_ads':'Google Ads', 'meta':'Meta Ads', 'gmb':'Organique', 'site':'Organique', 'autre':'Referral', 'appel':'Appel', 'lsa':'LSA' })[l.source] || (l.source || '—');
+    const clientName = (clientsRows.find(c => c.id === l.client_id) || {}).nom || '—';
+    return {
+      name: l.nom || "Anonyme",
+      company: clientName,
+      source: srcLbl,
+      campaign: l.utm_campaign || '—',
+      landing: l.utm_content || '/—',
+      score: 60 + Math.floor(Math.random() * 35),
+      status: statutToLeadStatus[(l.statut||'').toLowerCase()] || 'new',
+      owner: '—',
+      time: timeAgo(l.created_at),
+      phone: l.telephone || '—',
+      email: l.email || '—',
+      utm: l.utm_source || '',
+    };
+  });
+
+  /* INBOUND_BY_MONTH : par source (meta/google/organic/referral) */
+  const inboundKeyOf = (src) => src === 'meta' ? 'meta' :
+                               src === 'google_ads' ? 'google' :
+                               src === 'gmb' || src === 'site' ? 'organic' :
+                               'referral';
+  const INBOUND_BY_MONTH = monthsArr.map(m => {
+    const src = leadsByMonthSource[m.key] || {};
+    const row = { m: m.label, meta: 0, google: 0, organic: 0, referral: 0 };
+    Object.entries(src).forEach(([k, v]) => { row[inboundKeyOf(k)] += v; });
+    return row;
+  });
+
+  /* Publish on window so screen components can read */
+  Object.assign(window, {
+    MONTHS, REVENUE_DATA, LEADS_DATA, ROAS_DATA, KPIS, KPIS_B,
+    PIPELINE, CUSTOMERS, AUTOMATIONS, INTEGRATIONS, TEAM, ACTIVITY, CHANNELS,
+    INBOUND_LEADS, INBOUND_BY_MONTH,
+    __HELPAI_CLIENTS_ROWS: clientsRows,
+    __HELPAI_LEADS_ROWS: leadsRows,
+    __HELPAI_INV_ROWS: invRows,
+  });
+}
+window.loadAllData = loadAllData;
+
+/* ======================================================================
+ * AuthGate — renders login overlay until Supabase session exists.
+ * Once logged in, loads data, resolves admin/client role, then mounts <App/>.
+ * ==================================================================== */
+function AuthGate() {
+  const [state, setState] = React.useState({ status: 'booting' });
+  const [email, setEmail]       = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [loginError, setLoginError] = React.useState('');
+  const [loggingIn, setLoggingIn] = React.useState(false);
+
+  const resolveRole = React.useCallback(async (session) => {
+    if (!session || !session.user) { setState({ status: 'login' }); return; }
+    const user = session.user;
+    const isAdmin = user.app_metadata && user.app_metadata.role === 'admin';
+    let clientRow = null;
+    if (!isAdmin) {
+      const { data } = await sb.from('agency_clients').select('*').eq('user_id', user.id).maybeSingle();
+      clientRow = data;
+      if (!clientRow) {
+        setState({ status: 'no_client', user });
+        return;
+      }
+    }
+    try {
+      await loadAllData({ isAdmin, clientId: clientRow ? clientRow.id : null });
+    } catch (e) {
+      console.error('loadAllData failed', e);
+    }
+    setState({
+      status: 'ready',
+      user,
+      isAdmin,
+      client: clientRow,
+      displayName: isAdmin ? (user.email || 'Admin') : (clientRow ? clientRow.nom : user.email),
+    });
+  }, []);
+
+  React.useEffect(() => {
+    sb.auth.getSession().then(({ data }) => resolveRole(data ? data.session : null));
+    const { data: sub } = sb.auth.onAuthStateChange((evt, session) => {
+      if (evt === 'SIGNED_OUT') setState({ status: 'login' });
+      if (evt === 'SIGNED_IN' || evt === 'TOKEN_REFRESHED') resolveRole(session);
+    });
+    return () => { sub && sub.subscription && sub.subscription.unsubscribe(); };
+  }, [resolveRole]);
+
+  // Realtime: re-fetch on new leads
+  React.useEffect(() => {
+    if (state.status !== 'ready') return;
+    const ch = sb
+      .channel('agency_leads_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agency_leads' }, async () => {
+        try { await loadAllData({ isAdmin: state.isAdmin, clientId: state.client ? state.client.id : null }); } catch {}
+      })
+      .subscribe();
+    return () => { sb.removeChannel(ch); };
+  }, [state.status, state.isAdmin, state.client]);
+
+  async function onLogin(e) {
+    e.preventDefault();
+    setLoggingIn(true);
+    setLoginError('');
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    setLoggingIn(false);
+    if (error) setLoginError(error.message || 'Identifiants invalides');
+  }
+
+  if (state.status === 'booting') {
+    return React.createElement('div', { style: { minHeight:'100vh', display:'grid', placeItems:'center', color:'var(--text-3)' } },
+      React.createElement('div', null, 'Chargement…'));
+  }
+
+  if (state.status === 'login') {
+    return (
+      <div style={{ minHeight:'100vh', display:'grid', placeItems:'center', padding: 24 }}>
+        <form onSubmit={onLogin} className="card fade-up" style={{ width:'100%', maxWidth: 380, padding: 28 }}>
+          <div className="brand" style={{ justifyContent:'center', marginBottom: 18 }}>
+            <div className="brand-mark">HA</div>
+            <div>
+              <div className="brand-name">HelpAi Agency</div>
+              <div className="brand-sub">Business Copilot</div>
+            </div>
+          </div>
+          <div className="stack-md">
+            <div className="stack-xs">
+              <label className="small muted">Email</label>
+              <input className="search" style={{ minWidth: 0, cursor:'text' }}
+                     type="email" autoComplete="username" required
+                     value={email} onChange={e => setEmail(e.target.value)}/>
+            </div>
+            <div className="stack-xs">
+              <label className="small muted">Mot de passe</label>
+              <input className="search" style={{ minWidth: 0, cursor:'text' }}
+                     type="password" autoComplete="current-password" required
+                     value={password} onChange={e => setPassword(e.target.value)}/>
+            </div>
+            <button className="btn primary" type="submit"
+                    disabled={loggingIn}
+                    style={{ width:'100%', justifyContent:'center', height: 38 }}>
+              {loggingIn ? 'Connexion…' : 'Se connecter'}
+            </button>
+            {loginError && <div className="small" style={{ color:'var(--danger)' }}>{loginError}</div>}
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  if (state.status === 'no_client') {
+    return (
+      <div style={{ minHeight:'100vh', display:'grid', placeItems:'center', padding: 24 }}>
+        <div className="card" style={{ padding: 28, maxWidth: 460, textAlign:'center' }}>
+          <div className="brand" style={{ justifyContent:'center', marginBottom: 14 }}>
+            <div className="brand-mark">HA</div>
+            <div className="brand-name">HelpAi Agency</div>
+          </div>
+          <div className="muted small" style={{ marginBottom: 14 }}>
+            Aucun espace client n'est associé à votre compte ({state.user.email}).
+            <br/>Contactez l'agence à <strong>contactpro@helpaiagency.com</strong>.
+          </div>
+          <button className="btn" style={{ margin:'0 auto' }} onClick={() => sb.auth.signOut()}>Déconnexion</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ready */
+  return React.createElement(App, {
+    isAdmin: state.isAdmin,
+    displayName: state.displayName,
+    userClient: state.client,
+    onLogout: async () => { await sb.auth.signOut(); },
+  });
+}
+window.AuthGate = AuthGate;
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+/* Main screens: Overview, Acquisition, Sales, Pipeline, AI Activity, Customers, Automations, Integrations, Team */
+
+const C = CHART_COLORS;
+
+/* ============ Overview ============ */
+function ScreenOverview() {
+  const [range, setRange] = React.useState("12m");
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent">Copilote IA</span>
+            <span className="small muted">Résumé quotidien — 24 avr. 2026</span>
+          </div>
+          <div className="hp-title">3 signaux forts aujourd'hui. Ton CA a dépassé l'objectif mensuel de +5.2%.</div>
+          <div className="hp-sub">Le canal Meta Ads performe +38% vs la moyenne. 2 devis à relancer avant 18h. Thomas a 4 RDV à confirmer.</div>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn"><Icon name="eye" size={14}/> Voir détails</button>
+          <button className="btn primary"><Icon name="zap" size={14}/> Appliquer les 3</button>
+        </div>
+      </div>
+
+      <div className="row between">
+        <div className="chips">
+          {["7j","30j","3m","12m","YTD"].map(r => (
+            <button key={r} className={"chip " + (range === r ? "active" : "")} onClick={() => setRange(r)}>{r}</button>
+          ))}
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="chip"><Icon name="filter" size={12}/> Tous canaux</button>
+          <button className="chip">Toutes équipes</button>
+        </div>
+      </div>
+
+      <div className="kpi-grid">
+        {KPIS.map((k, i) => (
+          <div key={i} className="kpi">
+            <div className="kpi-label">
+              <span>{k.label}</span>
+              <span className={"trend " + k.dir}>{k.trend}</span>
+            </div>
+            <div className="kpi-value">
+              <span className="mono">{k.value}</span>
+              {k.unit && <span className="unit">{k.unit}</span>}
+            </div>
+            <div className="spark"><Sparkline data={k.spark} /></div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid g-2-1">
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="card-title">Évolution du chiffre d'affaires</div>
+              <div className="card-sub">CA réalisé vs objectif · budget publicitaire</div>
+            </div>
+            <div className="chart-legend">
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> CA</span>
+              <span className="lg" style={{ color: "var(--accent-2)" }}><span className="sw"/> Budget</span>
+              <span className="lg" style={{ color: "var(--text-3)" }}><span className="sw" style={{opacity: 0.5}}/> Objectif</span>
+            </div>
+          </div>
+          <div className="card-body" style={{ paddingTop: 8 }}>
+            <LineChart
+              data={REVENUE_DATA}
+              height={320}
+              series={[
+                { key: "ca", label: "CA", color: "var(--accent)", fmt: v => Math.round(v/1000) + "k €" },
+                { key: "goal", label: "Objectif", color: "var(--text-3)", dashed: true, fmt: v => Math.round(v/1000) + "k €" },
+                { key: "ads", label: "Budget Ads", color: "var(--accent-2)", fmt: v => Math.round(v/1000) + "k €" },
+              ]}
+              xLabels={MONTHS}
+              yFormat={v => (v/1000).toFixed(0) + "k"}
+            />
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Résumé IA</div>
+            <span className="tag accent"><Icon name="sparkles" size={10}/> Live</span>
+          </div>
+          <div className="card-body stack-md">
+            {[
+              { icon: "up", tone: "var(--success)", title: "Meta Ads performe +38%", body: "CPL descendu à 39€, en-dessous de l'objectif (47€)." },
+              { icon: "zap", tone: "var(--accent)", title: "2 devis à relancer", body: "Dubois SAS et Café Central n'ont pas répondu à J+3." },
+              { icon: "target", tone: "var(--info)", title: "Objectif Mars atteint à 105%", body: "Dépassé hier à 16h32. Reste 6j pour battre Fév." },
+              { icon: "check", tone: "var(--success)", title: "8 547 tâches IA", body: "Équivalent à 14j de travail humain économisé ce mois." },
+            ].map((s, i) => (
+              <div key={i} className="row" style={{ gap: 12, alignItems: "flex-start", paddingBottom: 14, borderBottom: i < 3 ? "1px solid var(--border-soft)" : "0" }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: 8,
+                  background: "var(--surface-2)", color: s.tone,
+                  display: "grid", placeItems: "center", flexShrink: 0
+                }}>
+                  <Icon name={s.icon} size={15}/>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{s.title}</div>
+                  <div className="small muted">{s.body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+        {KPIS_B.map((k, i) => (
+          <div key={i} className="kpi">
+            <div className="kpi-label">
+              <span>{k.label}</span>
+              <span className={"trend " + k.dir}>{k.trend}</span>
+            </div>
+            <div className="kpi-value">
+              <span className="mono">{k.value}</span>
+              {k.unit && <span className="unit">{k.unit}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid g-2">
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Leads par mois</div>
+            <div className="chart-legend">
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> Ads</span>
+              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> Organique</span>
+              <span className="lg" style={{ color: "var(--info)" }}><span className="sw"/> Referral</span>
+            </div>
+          </div>
+          <div className="card-body">
+            <BarChart
+              data={LEADS_DATA} height={260} xLabels={MONTHS}
+              series={[
+                { key: "ads", color: "var(--accent)" },
+                { key: "organic", color: "var(--success)" },
+                { key: "referral", color: "var(--info)" },
+              ]}
+            />
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">ROAS & CPL</div>
+            <div className="chart-legend">
+              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> ROAS</span>
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> CPL (€)</span>
+            </div>
+          </div>
+          <div className="card-body">
+            <LineChart
+              data={ROAS_DATA} height={260} xLabels={MONTHS}
+              yFormat={v => v.toFixed(1) + "x"}
+              dualAxis
+              series={[
+                { key: "roas", label: "ROAS", color: "var(--success)", fmt: v => v.toFixed(2) + "x" },
+                { key: "cpl", label: "CPL", color: "var(--accent)", rightAxis: true, dashed: true, fmt: v => Math.round(v) + " €", rightFormat: v => Math.round(v) + "€" },
+              ]}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid g-2-1">
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Activité temps réel</div>
+            <span className="pill live"><span className="dot"/> Live</span>
+          </div>
+          <div className="card-body" style={{ paddingTop: 4 }}>
+            {ACTIVITY.map((a, i) => (
+              <div key={i} className="act-row">
+                <div className="act-dot" style={{ background: a.tag === "IA" ? "var(--accent)" : "var(--info)" }}/>
+                <div>
+                  <div style={{ fontSize: 12.5, color: "var(--text)" }}>{a.what}</div>
+                  <div className="small muted" style={{ marginTop: 2 }}>
+                    <span className="tag" style={{ fontSize: 10, padding: "1px 6px" }}>{a.tag}</span>
+                    <span style={{ marginLeft: 6 }}>{a.who}</span>
+                  </div>
+                </div>
+                <div className="act-time">{a.time}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Répartition des leads</div>
+            <div className="card-sub">Mar 2026</div>
+          </div>
+          <div className="card-body" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
+            <div style={{ position: "relative" }}>
+              <DonutChart data={CHANNELS} size={180} thickness={20}/>
+              <div style={{
+                position: "absolute", inset: 0,
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center"
+              }}>
+                <div className="mono" style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>6 632</div>
+                <div className="small muted">leads</div>
+              </div>
+            </div>
+            <div className="stack-sm" style={{ width: "100%" }}>
+              {CHANNELS.map((c, i) => (
+                <div key={i} className="row between" style={{ fontSize: 12 }}>
+                  <span className="row" style={{ gap: 8 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color }}/>
+                    {c.name}
+                  </span>
+                  <span className="mono muted">{c.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============ Acquisition ============ */
+function ScreenAcquisition() {
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="Budget total" value="82 700" unit="€" trend="+8.2%" dir="up"/>
+        <KpiCard label="Leads générés" value="6 632" trend="+22.1%" dir="up"/>
+        <KpiCard label="CPL moyen" value="39" unit="€" trend="-18.4%" dir="up"/>
+        <KpiCard label="Conv. lead → deal" value="5.89" unit="%" trend="+0.8pt" dir="up"/>
+      </div>
+
+      {/* MAIN CHART */}
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <div className="card-title">Volume de leads par canal</div>
+            <div className="card-sub">12 derniers mois · cumul mensuel</div>
+          </div>
+          <div className="chart-legend">
+            <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> Meta Ads</span>
+            <span className="lg" style={{ color: "var(--accent-2)" }}><span className="sw"/> Google Ads</span>
+            <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> Organique</span>
+            <span className="lg" style={{ color: "var(--info)" }}><span className="sw"/> Referral</span>
+          </div>
+        </div>
+        <div className="card-body">
+          <BarChart
+            data={INBOUND_BY_MONTH} height={300} xLabels={MONTHS}
+            series={[
+              { key: "meta", color: "var(--accent)" },
+              { key: "google", color: "var(--accent-2)" },
+              { key: "organic", color: "var(--success)" },
+              { key: "referral", color: "var(--info)" },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Performance par canal</div>
+          <div className="chips">
+            <button className="chip active">Leads <span className="count">6632</span></button>
+            <button className="chip">Budget</button>
+            <button className="chip">CPL</button>
+            <button className="chip">ROAS</button>
+          </div>
+        </div>
+        <div style={{ padding: 0 }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Canal</th>
+                <th>Leads</th>
+                <th style={{ width: "25%" }}>Part du mix</th>
+                <th>Dépense</th>
+                <th>CPL</th>
+                <th>Conv.</th>
+                <th>ROAS</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {CHANNELS.map((c, i) => {
+                const cpl = c.spend === "0 €" ? "—" : Math.round(parseInt(c.spend) / c.leads || 0) + " €";
+                const roas = (6 - i * 0.8).toFixed(2) + "x";
+                return (
+                  <tr key={i}>
+                    <td>
+                      <span className="row" style={{ gap: 10 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 3, background: c.color }}/>
+                        <strong>{c.name}</strong>
+                      </span>
+                    </td>
+                    <td className="mono">{c.leads.toLocaleString("fr")}</td>
+                    <td>
+                      <div className="row" style={{ gap: 10 }}>
+                        <div className="progress" style={{ flex: 1, maxWidth: 200 }}>
+                          <div className="p-accent" style={{ width: c.value + "%" }}/>
+                        </div>
+                        <span className="mono small">{c.value}%</span>
+                      </div>
+                    </td>
+                    <td className="mono">{c.spend}</td>
+                    <td className="mono">{cpl}</td>
+                    <td className="mono">{(4.2 + i * 0.3).toFixed(2)}%</td>
+                    <td className="mono" style={{ color: "var(--success)", fontWeight: 600 }}>{roas}</td>
+                    <td><button className="btn icon ghost"><Icon name="more" size={14}/></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid g-2">
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Campagnes actives</div>
+            <button className="btn"><Icon name="plus" size={14}/> Nouvelle</button>
+          </div>
+          <div className="card-body stack-md">
+            {[
+              { name: "Spring Boost — Meta", budget: 18000, spent: 12400, leads: 284, roas: 6.2 },
+              { name: "Google Search — France", budget: 12000, spent: 8800, leads: 192, roas: 4.8 },
+              { name: "Retargeting carrousel", budget: 6000, spent: 4100, leads: 98, roas: 5.4 },
+              { name: "Meta — Lookalike clients", budget: 9000, spent: 6200, leads: 142, roas: 5.1 },
+            ].map((c, i) => (
+              <div key={i} className="stack-sm">
+                <div className="row between">
+                  <strong style={{ fontSize: 13 }}>{c.name}</strong>
+                  <span className="mono small" style={{ color: c.roas > 5 ? "var(--success)" : "var(--text-2)" }}>
+                    {c.roas}x ROAS
+                  </span>
+                </div>
+                <div className="row between small muted">
+                  <span>{c.leads} leads · {c.spent.toLocaleString("fr")} / {c.budget.toLocaleString("fr")} €</span>
+                  <span className="mono">{Math.round(c.spent / c.budget * 100)}%</span>
+                </div>
+                <div className="progress">
+                  <div className="p-accent" style={{ width: (c.spent / c.budget * 100) + "%" }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Entonnoir d'acquisition</div>
+            <span className="tag">12 derniers mois</span>
+          </div>
+          <div className="card-body stack-md">
+            {[
+              { step: "Impressions", value: 2840000, pct: 100 },
+              { step: "Clics", value: 142000, pct: 5.0 },
+              { step: "Visites site", value: 98400, pct: 3.46 },
+              { step: "Leads qualifiés", value: 6632, pct: 0.23 },
+              { step: "RDV planifiés", value: 1240, pct: 0.044 },
+              { step: "Deals signés", value: 320, pct: 0.011 },
+            ].map((s, i, arr) => {
+              const w = Math.max(8, (Math.log(s.value) / Math.log(arr[0].value)) * 100);
+              return (
+                <div key={i} className="row" style={{ gap: 12 }}>
+                  <div style={{ width: 110, fontSize: 12.5 }}>{s.step}</div>
+                  <div style={{ flex: 1, height: 28, background: "var(--surface-2)", borderRadius: 6, overflow: "hidden", position: "relative" }}>
+                    <div style={{
+                      width: w + "%", height: "100%",
+                      background: `linear-gradient(90deg, var(--accent), var(--accent-2))`,
+                      opacity: 0.25 + (i / arr.length) * 0.5,
+                      borderRadius: 6
+                    }}/>
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", padding: "0 10px" }}>
+                      <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{s.value.toLocaleString("fr")}</span>
+                      <span className="mono small muted" style={{ marginLeft: "auto" }}>{s.pct}%</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, unit, trend, dir }) {
+  return (
+    <div className="kpi">
+      <div className="kpi-label">
+        <EditableText value={label} tag="span"/>
+        <span className={"trend " + dir}>{trend}</span>
+      </div>
+      <div className="kpi-value">
+        <EditableText value={value} tag="span" className="mono"/>
+        {unit && <span className="unit">{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+window.ScreenOverview = ScreenOverview;
+window.ScreenAcquisition = ScreenAcquisition;
+window.KpiCard = KpiCard;
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+/* Pipeline, Sales, Customers screens */
+
+function ScreenPipeline() {
+  const [view, setView] = React.useState("kanban");
+  const colColors = {
+    "Nouveau": "var(--text-3)",
+    "Qualifié": "var(--info)",
+    "Devis envoyé": "var(--accent-2)",
+    "Négociation": "var(--accent)",
+    "Gagné": "var(--success)",
+  };
+  const totalByCol = Object.fromEntries(
+    Object.entries(PIPELINE).map(([k, v]) => [k, v.reduce((s, d) => s + parseInt(d.value.replace(/\D/g, "")), 0)])
+  );
+  const grandTotal = Object.values(totalByCol).reduce((s, v) => s + v, 0);
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="Pipeline total" value={(grandTotal/1000).toFixed(0)} unit="k €" trend="+34.2k" dir="up"/>
+        <KpiCard label="Deals actifs" value={Object.values(PIPELINE).reduce((s, v) => s + v.length, 0)} trend="+4" dir="up"/>
+        <KpiCard label="Cycle moyen" value="14.2" unit="j" trend="-2.1j" dir="up"/>
+        <KpiCard label="Win rate" value="32.4" unit="%" trend="+1.8pt" dir="up"/>
+      </div>
+
+      <div className="row between">
+        <div className="row" style={{ gap: 8 }}>
+          <div className="seg" style={{ width: 200 }}>
+            <button className={view === "kanban" ? "active" : ""} onClick={() => setView("kanban")}>Kanban</button>
+            <button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>Liste</button>
+          </div>
+          <button className="chip active">Tous les deals <span className="count">18</span></button>
+          <button className="chip">Mes deals <span className="count">7</span></button>
+          <button className="chip"><Icon name="filter" size={12}/> Chauds</button>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <div className="search" style={{ minWidth: 220, height: 30 }}>
+            <Icon name="search" size={14}/>
+            <span>Chercher un deal…</span>
+          </div>
+          <button className="btn primary"><Icon name="plus" size={14}/> Nouveau deal</button>
+        </div>
+      </div>
+
+      {view === "kanban" ? (
+        <div className="kanban">
+          {Object.entries(PIPELINE).map(([col, cards]) => (
+            <div key={col} className="kb-col">
+              <div className="kb-head">
+                <div className="kb-title">
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: colColors[col] }}/>
+                  {col}
+                </div>
+                <span className="kb-count">{cards.length} · {(totalByCol[col]/1000).toFixed(0)}k €</span>
+              </div>
+              {cards.map((card, i) => (
+                <div key={i} className="kb-card">
+                  <div className="row between" style={{ marginBottom: 6 }}>
+                    <div className="kb-card-title">{card.name}</div>
+                    {card.hot && <span style={{ fontSize: 12 }}>🔥</span>}
+                  </div>
+                  <div className="kb-card-sub">{card.source} · {card.age}</div>
+                  <div className="kb-card-meta">
+                    <span className={"av"} style={{ width: 22, height: 22, fontSize: 9 }}>{card.owner}</span>
+                    <span className="kb-card-value">{card.value}</span>
+                  </div>
+                </div>
+              ))}
+              <button className="btn ghost" style={{ width: "100%", justifyContent: "center", color: "var(--text-3)", marginTop: 4 }}>
+                <Icon name="plus" size={12}/> Ajouter
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Deal</th><th>Statut</th><th>Valeur</th><th>Source</th><th>Owner</th><th>Âge</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(PIPELINE).flatMap(([col, cards]) =>
+                cards.map((card, i) => (
+                  <tr key={col + i}>
+                    <td><strong>{card.name}</strong>{card.hot && " 🔥"}</td>
+                    <td><span className="tag" style={{ color: colColors[col], borderColor: colColors[col], background: "transparent" }}>{col}</span></td>
+                    <td className="mono">{card.value}</td>
+                    <td>{card.source}</td>
+                    <td><span className="av" style={{ width: 22, height: 22, fontSize: 9 }}>{card.owner}</span></td>
+                    <td className="muted">{card.age}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============ Sales (analytics) ============ */
+function ScreenSales() {
+  const SALES_BY_SOURCE = [
+    { source: "Meta Ads",      color: "oklch(0.74 0.155 55)",  deals: 142, ca: 718400, ticket: 5060, winRate: 34.2, cycle: 12.4 },
+    { source: "Google Ads",    color: "oklch(0.80 0.120 60)",  deals: 86,  ca: 462100, ticket: 5373, winRate: 31.8, cycle: 14.1 },
+    { source: "Organique SEO", color: "oklch(0.78 0.13 155)",  deals: 52,  ca: 298900, ticket: 5748, winRate: 41.6, cycle: 16.8 },
+    { source: "Referral",      color: "oklch(0.70 0.12 240)",  deals: 40,  ca: 183500, ticket: 4587, winRate: 52.1, cycle: 9.2 },
+  ];
+  const totalCA = SALES_BY_SOURCE.reduce((s, x) => s + x.ca, 0);
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="CA signé (12m)" value="1 662 900" unit="€" trend="+24.3%" dir="up"/>
+        <KpiCard label="Ticket moyen" value="5 196" unit="€" trend="+342€" dir="up"/>
+        <KpiCard label="Deals gagnés" value="320" trend="+72" dir="up"/>
+        <KpiCard label="Velocity" value="42.1k" unit="€/j" trend="+18.4%" dir="up"/>
+      </div>
+
+      {/* Performance commerciale par CANAL D'ACQUISITION (style brief) */}
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <div className="card-title">Performance commerciale par canal</div>
+            <div className="card-sub">CA, deals, taux de conversion et cycle moyen — 12 derniers mois</div>
+          </div>
+          <div className="chips">
+            <button className="chip active">CA généré</button>
+            <button className="chip">Deals fermés</button>
+            <button className="chip">Taux de conversion</button>
+          </div>
+        </div>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Canal</th>
+              <th>Deals</th>
+              <th>CA généré</th>
+              <th style={{ width: "22%" }}>Part du CA</th>
+              <th>Ticket moyen</th>
+              <th>Win rate</th>
+              <th>Cycle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SALES_BY_SOURCE.map((s, i) => {
+              const pct = (s.ca / totalCA) * 100;
+              return (
+                <tr key={i}>
+                  <td>
+                    <span className="row" style={{ gap: 10 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color }}/>
+                      <strong>{s.source}</strong>
+                    </span>
+                  </td>
+                  <td className="mono">{s.deals}</td>
+                  <td className="mono"><strong>{s.ca.toLocaleString("fr")} €</strong></td>
+                  <td>
+                    <div className="row" style={{ gap: 10 }}>
+                      <div className="progress" style={{ flex: 1, maxWidth: 200 }}>
+                        <div className="p-accent" style={{ width: pct + "%", background: s.color }}/>
+                      </div>
+                      <span className="mono small">{pct.toFixed(1)}%</span>
+                    </div>
+                  </td>
+                  <td className="mono">{s.ticket.toLocaleString("fr")} €</td>
+                  <td className="mono" style={{ color: s.winRate > 40 ? "var(--success)" : "var(--text)" }}>
+                    {s.winRate.toFixed(1)}%
+                  </td>
+                  <td className="mono muted">{s.cycle}j</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid g-2">
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">CA mensuel</div>
+            <span className="tag success">+24.3% YoY</span>
+          </div>
+          <div className="card-body">
+            <BarChart
+              data={REVENUE_DATA} height={240} xLabels={MONTHS}
+              series={[{ key: "ca", color: "var(--accent)" }]}
+              yFormat={v => (v/1000).toFixed(0) + "k"}
+            />
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Taux de conversion par étape</div>
+          </div>
+          <div className="card-body stack-md">
+            {[
+              { from: "Lead → Qualifié", value: 64.2 },
+              { from: "Qualifié → Devis", value: 58.8 },
+              { from: "Devis → Négociation", value: 42.1 },
+              { from: "Négociation → Signé", value: 68.4 },
+            ].map((s, i) => (
+              <div key={i} className="stack-sm">
+                <div className="row between" style={{ fontSize: 12.5 }}>
+                  <span>{s.from}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>{s.value}%</span>
+                </div>
+                <div className="progress">
+                  <div className="p-accent" style={{ width: s.value + "%" }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============ CRM ============ */
+function ScreenCustomers() {
+  const [tab, setTab] = React.useState("leads");
+  const [filter, setFilter] = React.useState("all");
+  const filteredCustomers = CUSTOMERS.filter(c => filter === "all" || c.status === filter);
+
+  const sourceColors = {
+    "Meta Ads":   "oklch(0.74 0.155 55)",
+    "Google Ads": "oklch(0.80 0.120 60)",
+    "Organique":  "oklch(0.78 0.13 155)",
+    "Referral":   "oklch(0.70 0.12 240)",
+  };
+  const statusLabel = {
+    new: { label: "Nouveau", color: "var(--info)" },
+    contacted: { label: "Contacté", color: "var(--accent-2)" },
+    qualified: { label: "Qualifié", color: "var(--success)" },
+    nurturing: { label: "Nurturing", color: "var(--text-3)" },
+  };
+
+  const newToday = INBOUND_LEADS.filter(l => l.time.includes("min") || l.time.includes("4 min")).length;
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="Leads entrants (30j)" value="428" trend="+62" dir="up"/>
+        <KpiCard label="Nouveaux aujourd'hui" value={String(8 + newToday)} trend="+3" dir="up"/>
+        <KpiCard label="Clients actifs" value="148" trend="+12" dir="up"/>
+        <KpiCard label="Santé moyenne" value="82" unit="/100" trend="+3pt" dir="up"/>
+      </div>
+
+      <div className="row between">
+        <div className="seg" style={{ width: 320 }}>
+          <button className={tab === "leads" ? "active" : ""} onClick={() => setTab("leads")}>Leads entrants · {INBOUND_LEADS.length}</button>
+          <button className={tab === "clients" ? "active" : ""} onClick={() => setTab("clients")}>Clients · {CUSTOMERS.length}</button>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <div className="search" style={{ minWidth: 240, height: 30 }}>
+            <Icon name="search" size={14}/>
+            <span>Chercher un contact…</span>
+          </div>
+          <button className="btn"><Icon name="download" size={13}/> Export CSV</button>
+          <button className="btn primary"><Icon name="plus" size={14}/> Nouveau contact</button>
+        </div>
+      </div>
+
+      {tab === "leads" && (
+        <>
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <div className="card-title">Leads entrants tractés automatiquement</div>
+                <div className="card-sub">UTM, source, landing et scoring capturés en temps réel via les automations</div>
+              </div>
+              <span className="pill live"><span className="dot"/> Tracking actif</span>
+            </div>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Lead</th>
+                  <th>Source</th>
+                  <th>Campagne / Landing</th>
+                  <th>Score</th>
+                  <th>Statut</th>
+                  <th>Owner</th>
+                  <th>Reçu</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {INBOUND_LEADS.map((l, i) => (
+                  <tr key={i}>
+                    <td>
+                      <div className="row" style={{ gap: 10 }}>
+                        <span className={"av" + " av-colors-" + ((i % 4) + 1)} style={{ width: 28, height: 28, fontSize: 10 }}>
+                          {l.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                        </span>
+                        <div>
+                          <strong style={{ fontSize: 12.5 }}>{l.name}</strong>
+                          <div className="small muted">{l.company}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="row" style={{ gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: sourceColors[l.source] || "var(--text-3)" }}/>
+                        <span style={{ fontSize: 12.5 }}>{l.source}</span>
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: 12.5 }}>{l.campaign}</div>
+                      <div className="small muted mono">{l.landing}</div>
+                    </td>
+                    <td>
+                      <div className="row" style={{ gap: 8 }}>
+                        <div className="progress" style={{ width: 50 }}>
+                          <div style={{
+                            width: l.score + "%", height: "100%", borderRadius: 99,
+                            background: l.score > 80 ? "var(--success)" : l.score > 60 ? "var(--accent)" : "var(--text-3)"
+                          }}/>
+                        </div>
+                        <span className="mono" style={{ fontWeight: 600, fontSize: 12 }}>{l.score}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="tag" style={{
+                        color: statusLabel[l.status].color,
+                        borderColor: statusLabel[l.status].color,
+                        background: "transparent"
+                      }}>{statusLabel[l.status].label}</span>
+                    </td>
+                    <td>
+                      {l.owner === "—"
+                        ? <span className="muted small">Non assigné</span>
+                        : <span className="av" style={{ width: 22, height: 22, fontSize: 9 }}>{l.owner}</span>}
+                    </td>
+                    <td className="muted small">{l.time}</td>
+                    <td><button className="btn icon ghost"><Icon name="more" size={14}/></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid g-2">
+            <div className="card">
+              <div className="card-head">
+                <div className="card-title">Volume entrants · 30 derniers jours</div>
+                <span className="tag accent">Tracking auto</span>
+              </div>
+              <div className="card-body">
+                <BarChart
+                  data={INBOUND_BY_MONTH.slice(-6)} height={220} xLabels={MONTHS.slice(-6)}
+                  series={[
+                    { key: "meta", color: "var(--accent)" },
+                    { key: "google", color: "var(--accent-2)" },
+                    { key: "organic", color: "var(--success)" },
+                    { key: "referral", color: "var(--info)" },
+                  ]}
+                />
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-head">
+                <div className="card-title">Automations de tracking actives</div>
+                <span className="mono small muted">5 actives</span>
+              </div>
+              <div className="card-body stack-md">
+                {[
+                  { name: "Capture form site→CRM", desc: "Push instantané + scoring + assignation", runs: "1 892" },
+                  { name: "Sync Meta Lead Ads", desc: "Webhook — dédoublonnage + UTM", runs: "2 134" },
+                  { name: "Sync Google Lead Form", desc: "Polling 60s + enrichissement", runs: "1 421" },
+                  { name: "Tracking referral", desc: "Param /?ref + attribution multi-touch", runs: "412" },
+                  { name: "Scoring auto", desc: "Recalcul à chaque interaction", runs: "8 547" },
+                ].map((a, i) => (
+                  <div key={i} className="row" style={{ gap: 12, paddingBottom: 12, borderBottom: i < 4 ? "1px solid var(--border-soft)" : "0" }}>
+                    <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--accent-soft)", color: "var(--accent)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                      <Icon name="zap" size={14}/>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12.5 }}>{a.name}</div>
+                      <div className="small muted">{a.desc}</div>
+                    </div>
+                    <span className="mono small muted">{a.runs}×</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab === "clients" && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Portefeuille client</div>
+            <div className="chips">
+              <button className={"chip " + (filter === "all" ? "active" : "")} onClick={() => setFilter("all")}>Tous <span className="count">{CUSTOMERS.length}</span></button>
+              <button className={"chip " + (filter === "ok" ? "active" : "")} onClick={() => setFilter("ok")}>En bonne santé</button>
+              <button className={"chip " + (filter === "warn" ? "active" : "")} onClick={() => setFilter("warn")}>À surveiller</button>
+              <button className={"chip " + (filter === "bad" ? "active" : "")} onClick={() => setFilter("bad")}>À risque</button>
+            </div>
+          </div>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Client</th><th>Type</th><th>Valeur</th>
+                <th style={{ width: "18%" }}>Santé</th>
+                <th>Owner</th><th>Depuis</th><th>Prochaine action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCustomers.map((c, i) => (
+                <tr key={i}>
+                  <td>
+                    <span className="row" style={{ gap: 10 }}>
+                      <span className="status-dot" data-status={c.status}
+                        style={{ background: c.status === "ok" ? "var(--success)" : c.status === "warn" ? "var(--accent)" : "var(--danger)" }}/>
+                      <strong>
+                        <EditableText value={c.name} tag="span"/>
+                      </strong>
+                    </span>
+                  </td>
+                  <td className="muted">{c.type}</td>
+                  <td className="mono"><EditableText value={c.value} tag="span"/></td>
+                  <td>
+                    <div className="row" style={{ gap: 10 }}>
+                      <div className="progress" style={{ flex: 1, maxWidth: 140 }}>
+                        <div style={{
+                          width: c.health + "%", height: "100%", borderRadius: 99,
+                          background: c.health > 75 ? "var(--success)" : c.health > 50 ? "var(--accent)" : "var(--danger)"
+                        }}/>
+                      </div>
+                      <span className="mono small">{c.health}</span>
+                    </div>
+                  </td>
+                  <td><span className="av" style={{ width: 22, height: 22, fontSize: 9 }}>{c.owner}</span></td>
+                  <td className="muted">{c.since}</td>
+                  <td>{c.next === "—" ? <span className="muted">—</span> : <span className="tag"><EditableText value={c.next} tag="span"/></span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+window.ScreenPipeline = ScreenPipeline;
+window.ScreenSales = ScreenSales;
+window.ScreenCustomers = ScreenCustomers;
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+/* AI Activity, Automations, Integrations, Team screens */
+
+function ScreenAI() {
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="sparkles" size={10}/> Agent HelpAi</span>
+            <span className="pill live"><span className="dot"/> Actif 24/7</span>
+          </div>
+          <div className="hp-title">L'IA a traité 8 547 tâches ce mois — équivalent à 14.2 jours de travail humain.</div>
+          <div className="hp-sub">Qualification de leads, relances, scoring, réponses first-touch, collecte d'avis — tout tourne en continu.</div>
+        </div>
+        <button className="btn primary"><Icon name="plus" size={14}/> Nouvelle compétence</button>
+      </div>
+
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="Tâches traitées" value="8 547" trend="+1 204" dir="up"/>
+        <KpiCard label="Temps économisé" value="14.2" unit="jours" trend="+3.1j" dir="up"/>
+        <KpiCard label="Taux de succès" value="96.4" unit="%" trend="+0.8pt" dir="up"/>
+        <KpiCard label="Escalades humaines" value="142" trend="-18" dir="up"/>
+      </div>
+
+      <div className="grid g-2-1">
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Activité de l'agent (24h)</div>
+            <div className="chart-legend">
+              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> Tâches</span>
+              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> Succès</span>
+            </div>
+          </div>
+          <div className="card-body">
+            <LineChart
+              data={Array.from({ length: 24 }, (_, i) => ({
+                m: i + "h",
+                tasks: 80 + Math.sin(i / 3) * 60 + Math.random() * 40 + (i > 8 && i < 20 ? 80 : 0),
+                success: 75 + Math.sin(i / 3) * 55 + Math.random() * 35 + (i > 8 && i < 20 ? 78 : 0),
+              }))}
+              height={260}
+              xLabels={Array.from({ length: 24 }, (_, i) => i + "h")}
+              series={[
+                { key: "tasks", label: "Tâches", color: "var(--accent)", fmt: v => Math.round(v) },
+                { key: "success", label: "Succès", color: "var(--success)", fmt: v => Math.round(v) },
+              ]}
+              yFormat={v => Math.round(v)}
+            />
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">Compétences actives</div>
+          </div>
+          <div className="card-body stack-md">
+            {[
+              { n: "Qualification lead", c: 2841, color: "var(--accent)" },
+              { n: "Relance devis", c: 487, color: "var(--accent-2)" },
+              { n: "Scoring chaud", c: 1892, color: "var(--success)" },
+              { n: "Réponse first-touch", c: 2104, color: "var(--info)" },
+              { n: "Collecte avis", c: 628, color: "oklch(0.65 0.15 310)" },
+              { n: "Reporting hebdo", c: 38, color: "var(--text-3)" },
+            ].map((s, i) => (
+              <div key={i} className="stack-sm">
+                <div className="row between">
+                  <span style={{ fontSize: 12.5, fontWeight: 500 }}>{s.n}</span>
+                  <span className="mono small">{s.c.toLocaleString("fr")}</span>
+                </div>
+                <div className="progress">
+                  <div style={{ width: Math.min(100, (s.c / 3000) * 100) + "%", height: "100%", background: s.color, borderRadius: 99 }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Conversations récentes de l'agent</div>
+          <span className="pill live"><span className="dot"/> Temps réel</span>
+        </div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {[
+            { lead: "Marie Dubois", msg: "Intéressée par un audit climatisation pour un local de 280m²", score: 92, action: "RDV proposé lundi 14h", time: "il y a 3 min" },
+            { lead: "Pascal Vincent", msg: "Demande un devis pour 4 sites — groupe hôtelier", score: 88, action: "Escaladé à Thomas R.", time: "il y a 14 min" },
+            { lead: "Café Central", msg: "N'a pas répondu à la relance J+3", score: 54, action: "Nouvelle relance programmée J+7", time: "il y a 42 min" },
+            { lead: "Dr. Petit", msg: "Souhaite annuler son contrat — insatisfait", score: 18, action: "Escaladé à Nicolas B.", time: "il y a 1h" },
+          ].map((c, i) => (
+            <div key={i} style={{ padding: "14px 18px", borderBottom: i < 3 ? "1px solid var(--border-soft)" : "0" }}>
+              <div className="row between" style={{ marginBottom: 6 }}>
+                <div className="row" style={{ gap: 10 }}>
+                  <span className={"av av-colors-" + ((i % 4) + 1)}>{c.lead.split(" ").map(x => x[0]).join("").slice(0, 2)}</span>
+                  <strong>{c.lead}</strong>
+                  <span className="tag accent">Score {c.score}</span>
+                </div>
+                <span className="mono small muted">{c.time}</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 6 }}>"{c.msg}"</div>
+              <div className="row" style={{ gap: 8 }}>
+                <Icon name="arrow" size={12} className="muted"/>
+                <span className="small" style={{ color: "var(--accent)", fontWeight: 500 }}>{c.action}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScreenAutomations() {
+  const [tab, setTab] = React.useState("all");
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="Workflows actifs" value="24" trend="+3" dir="up"/>
+        <KpiCard label="Exécutions (30j)" value="6 587" trend="+892" dir="up"/>
+        <KpiCard label="Taux de succès" value="94.7" unit="%" trend="+1.2pt" dir="up"/>
+        <KpiCard label="Temps gagné" value="218" unit="h" trend="+42h" dir="up"/>
+      </div>
+
+      <div className="row between">
+        <div className="chips">
+          {[["all","Tous",24],["on","Actifs",21],["paused","Pause",3],["draft","Brouillons",5]].map(([k,l,n]) => (
+            <button key={k} className={"chip " + (tab === k ? "active" : "")} onClick={() => setTab(k)}>
+              {l} <span className="count">{n}</span>
+            </button>
+          ))}
+        </div>
+        <button className="btn primary"><Icon name="plus" size={14}/> Créer un workflow</button>
+      </div>
+
+      <div className="card" style={{ padding: 0 }}>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Workflow</th><th>Déclencheur</th><th>Exécutions</th>
+              <th style={{ width: "18%" }}>Succès</th>
+              <th>Dernière</th><th>État</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {AUTOMATIONS.map((a, i) => (
+              <tr key={i}>
+                <td><strong>{a.name}</strong></td>
+                <td><code className="code">{a.trigger}</code></td>
+                <td className="mono">{a.runs.toLocaleString("fr")}</td>
+                <td>
+                  <div className="row" style={{ gap: 10 }}>
+                    <div className="progress" style={{ flex: 1, maxWidth: 120 }}>
+                      <div className={a.success > 90 ? "p-success" : "p-accent"} style={{ width: a.success + "%" }}/>
+                    </div>
+                    <span className="mono small">{a.success}%</span>
+                  </div>
+                </td>
+                <td className="muted small">{a.last}</td>
+                <td>
+                  {a.status === "on"
+                    ? <span className="tag success"><span className="status-dot ok"/> Actif</span>
+                    : <span className="tag"><span className="status-dot off"/> Pause</span>}
+                </td>
+                <td>
+                  <button className="btn icon ghost">
+                    <Icon name={a.status === "on" ? "pause" : "play"} size={13}/>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ScreenIntegrations() {
+  const [filter, setFilter] = React.useState("all");
+  const cats = [...new Set(INTEGRATIONS.map(i => i.cat))];
+  const filtered = filter === "all" ? INTEGRATIONS : INTEGRATIONS.filter(i => i.cat === filter);
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <KpiCard label="Connectées" value="10" unit={`/ ${INTEGRATIONS.length}`} trend="+2" dir="up"/>
+        <KpiCard label="Événements (30j)" value="76 218" trend="+12 480" dir="up"/>
+        <KpiCard label="Disponibilité" value="99.98" unit="%" trend="stable" dir="flat"/>
+      </div>
+
+      <div className="row between">
+        <div className="chips">
+          <button className={"chip " + (filter === "all" ? "active" : "")} onClick={() => setFilter("all")}>Tout</button>
+          {cats.map(c => (
+            <button key={c} className={"chip " + (filter === c ? "active" : "")} onClick={() => setFilter(c)}>{c}</button>
+          ))}
+        </div>
+        <div className="search" style={{ minWidth: 240, height: 30 }}>
+          <Icon name="search" size={14}/>
+          <span>Chercher une intégration…</span>
+        </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        {filtered.map((it, i) => (
+          <div key={i} className="card" style={{ padding: 16 }}>
+            <div className="row between" style={{ marginBottom: 12 }}>
+              <div className="row" style={{ gap: 10 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 9,
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border-soft)",
+                  display: "grid", placeItems: "center",
+                  fontFamily: "var(--font-display)", fontWeight: 700,
+                  fontSize: 13, color: "var(--text)"
+                }}>
+                  {it.name.split(" ").map(x => x[0]).slice(0, 2).join("")}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{it.name}</div>
+                  <div className="small muted">{it.cat}</div>
+                </div>
+              </div>
+              {it.status === "connected" && <span className="status-dot ok"/>}
+            </div>
+            <div className="small muted" style={{ marginBottom: 10, minHeight: 18 }}>
+              {it.status === "connected"
+                ? <>Dernière sync : <strong style={{ color: "var(--text-2)" }}>{it.last}</strong></>
+                : it.status === "disconnected" ? "Connexion perdue" : "Disponible à installer"}
+            </div>
+            <div className="row between">
+              <span className="small mono muted">{it.events !== "—" ? it.events + " évts" : "—"}</span>
+              {it.status === "connected"
+                ? <button className="btn" style={{ height: 26, fontSize: 11 }}>Configurer</button>
+                : it.status === "disconnected"
+                ? <button className="btn primary" style={{ height: 26, fontSize: 11 }}>Reconnecter</button>
+                : <button className="btn" style={{ height: 26, fontSize: 11 }}>Installer</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScreenTeam() {
+  return (
+    <div className="stack-lg fade-up">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="Équipiers" value="5" trend="+1" dir="up"/>
+        <KpiCard label="Productivité" value="94" unit="%" trend="+4pt" dir="up"/>
+        <KpiCard label="RDV cette semaine" value="68" trend="+12" dir="up"/>
+        <KpiCard label="Quota atteint" value="3" unit="/ 5" trend="—" dir="flat"/>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        {TEAM.map((t, i) => (
+          <div key={i} className="card" style={{ padding: 18 }}>
+            <div className="row" style={{ gap: 12, marginBottom: 14 }}>
+              <span className={"av lg av-colors-" + ((i % 4) + 1)}>{t.initials}</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                <div className="small muted">{t.role}</div>
+              </div>
+            </div>
+            <div className="grid g-2" style={{ gap: 8, marginBottom: 12 }}>
+              <div>
+                <div className="small muted">Deals</div>
+                <div className="mono" style={{ fontSize: 18, fontWeight: 700 }}>{t.deals}</div>
+              </div>
+              <div>
+                <div className="small muted">CA généré</div>
+                <div className="mono" style={{ fontSize: 14, fontWeight: 700 }}>{t.ca}</div>
+              </div>
+            </div>
+            <div className="stack-sm">
+              <div className="row between small">
+                <span className="muted">Charge de travail</span>
+                <span className="mono">{t.load}%</span>
+              </div>
+              <div className="progress">
+                <div style={{ width: t.load + "%", height: "100%", background: t.load > 85 ? "var(--danger)" : t.load > 60 ? "var(--accent)" : "var(--success)", borderRadius: 99 }}/>
+              </div>
+            </div>
+          </div>
+        ))}
+        <div className="card" style={{ padding: 18, border: "1px dashed var(--border)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 180, cursor: "pointer" }}>
+          <div style={{ textAlign: "center", color: "var(--text-3)" }}>
+            <Icon name="plus" size={20}/>
+            <div style={{ marginTop: 8, fontSize: 13, fontWeight: 500 }}>Inviter un équipier</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.ScreenAI = ScreenAI;
+window.ScreenAutomations = ScreenAutomations;
+window.ScreenIntegrations = ScreenIntegrations;
+window.ScreenTeam = ScreenTeam;
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+/* Architecture screen — 5 pillars + orchestrator + detail panels */
+
+const PILLARS = {
+  offre: {
+    key: "offre",
+    label: "Offre",
+    icon: "target",
+    color: "oklch(0.72 0.16 300)",
+    colorSoft: "oklch(0.72 0.16 300 / 0.12)",
+    tagline: "On ne peut pas scaler une offre mal positionnée.",
+    why: "On a construit 4 automations autour de l'Offre parce que tout le reste — acquisition, ventes, delivery — dépend de ce qu'on vend et à quel prix. Un CPL qui baisse ne sert à rien si le panier moyen stagne. On a donc d'abord travaillé le positionnement et le pricing avant d'injecter du volume.",
+    problems: [
+      { t: "Prix à l'instinct", d: "Aucune donnée concurrentielle → sur-price sur le monosplit, sous-price sur le gainable" },
+      { t: "Mix produit déséquilibré", d: "85% monosplit (panier 3 300€) alors que le gainable (12 000€) était techniquement vendable" },
+      { t: "Opportunités réglementaires ratées", d: "CEE, MaPrimeRénov' : aides en retard de 2 à 3 semaines vs la concurrence" },
+      { t: "Marge sacrifiée sans le savoir", d: "En période de forte demande (canicule), les tarifs ne bougeaient pas alors que le marché le permettait" },
+    ],
+    impact: [
+      { label: "Panier moyen", from: "3 300 €", to: "5 818 €" },
+      { label: "Part gainable (CA)", from: "8 %", to: "45 %" },
+      { label: "Marge brute Q1", from: "—", to: "+12 %" },
+      { label: "Opportunités réglementaires", from: "0 suivi", to: "3 détectées & actionnées" },
+    ],
+    automations: [
+      { name: "Veille concurrentielle", desc: "Scraping prix concurrents + rapport hebdomadaire avec recommandations", result: "12 rapports générés", freq: "Hebdo", details: [
+        "Ne jamais surpricer ni sous-pricer : chaque devis est ancré sur la réalité du marché local, pas sur l'instinct",
+        "Détecter immédiatement quand un concurrent sort une promo agressive — et préparer la réponse avant que les leads le mentionnent",
+        "Identifier les créneaux laissés libres par la concurrence (segment gainable sous-exploité par exemple) et s'y positionner en premier",
+        "Transformer l'information marché en brief commercial actionnable, distribué à toute l'équipe en 24h",
+      ]},
+      { name: "Pricing dynamique", desc: "Ajustement tarifs monosplit/multisplit/gainable selon demande et saison", result: "+12% marge brute Q1", freq: "Quotidien", details: [
+        "Profiter des pics de demande (canicule, primes) sans choquer : ajustements progressifs pilotés par la donnée",
+        "Baisser intelligemment sur les segments en perte de vitesse pour ne pas porter du stock invendable",
+        "Protéger la marge en période creuse : refuser les devis trop bas au lieu d'accepter à perte",
+        "Donner aux commerciaux une grille à jour chaque matin, plus de devis hors-sol",
+      ]},
+      { name: "Détection opportunités", desc: "Veille réglementaire (CEE, MaPrimeRénov') + alertes nouvelles aides", result: "3 opportunités détectées", freq: "Temps réel", details: [
+        "Être le premier à proposer les nouvelles aides — pendant 2-3 semaines, la concurrence ne les connaît même pas encore",
+        "Transformer chaque évolution réglementaire en argument commercial activable immédiatement",
+        "Éviter les pénalités : suivre la conformité des offres en continu, pas une fois par trimestre",
+        "Détecter les niches émergentes (PAC air-eau subventionnée par exemple) avant qu'elles ne deviennent saturées",
+      ]},
+      { name: "Analyse mix produit", desc: "Suivi répartition monosplit/multisplit/gainable + recommandations upsell", result: "Gainable : 8% → 45%", freq: "Hebdo", details: [
+        "Identifier mois après mois les leads qui auraient pu basculer sur du gainable — et outiller les commerciaux pour les détecter à l'avenir",
+        "Éviter la dérive vers le monosplit par facilité : les commerciaux reprennent la main sur le produit vendu",
+        "Mesurer l'effort de formation commerciale sur le gainable et son retour exact en marge",
+        "Visualiser le potentiel restant du portefeuille : combien de clients mono pourraient passer multi ou gainable",
+      ]},
+    ],
+  },
+  acquisition: {
+    key: "acquisition",
+    label: "Acquisition",
+    icon: "acquisition",
+    color: "oklch(0.74 0.155 55)",
+    colorSoft: "oklch(0.74 0.155 55 / 0.12)",
+    tagline: "On génère du volume seulement quand le coût par lead est sous contrôle.",
+    why: "On a construit 6 automations parce que l'acquisition est un système, pas une campagne. Les créas, les audiences, le budget, les landing pages et la réputation locale sont interdépendants. Améliorer l'un sans les autres donne des résultats limités. On a tout branché ensemble pour que chaque levier se renforce.",
+    problems: [
+      { t: "CPL à 78 €", d: "Trop élevé pour être rentable à l'échelle — chaque lead coûtait presque 2 deals potentiels" },
+      { t: "Fatigue créative non détectée", d: "Mêmes visuels pendant des semaines → CTR qui chute, CPL qui monte, sans alerte" },
+      { t: "Audiences jamais nettoyées", d: "Budget gaspillé sur les profils non-acheteurs, sans exclusion des audiences épuisées" },
+      { t: "Note Google 3,2/5", d: "Premier filtre des prospects avant d'appeler — une mauvaise note bloque la conversion organique et referral" },
+    ],
+    impact: [
+      { label: "CPL", from: "78 €", to: "40 €" },
+      { label: "ROAS mensuel", from: "2,8x", to: "7,9x" },
+      { label: "Leads générés / mois", from: "117", to: "1 067" },
+      { label: "Note Google", from: "3,2 ★ (35 avis)", to: "4,8 ★ (312 avis)" },
+    ],
+    automations: [
+      { name: "Génération créas Meta", desc: "Création variations visuels + copies pour campagnes Meta Ads", result: "186 créas générées", freq: "Hebdo", details: [
+        "Ne jamais laisser une audience se fatiguer : nouvelles créas prêtes avant que le CTR ne chute",
+        "Tester 10x plus de variantes à coût fixe — le volume d'apprentissage de Meta explose",
+        "Transformer les meilleures créas en templates réutilisables sur d'autres offres",
+        "Réduire le goulot d'étranglement créatif : plus besoin d'attendre un graphiste externe",
+      ]},
+      { name: "Optimisation audiences", desc: "Analyse performance audiences + recommandations scaling/exclusions", result: "CPL : 78€ → 40€", freq: "Quotidien", details: [
+        "Exclure automatiquement les audiences épuisées avant qu'elles ne ruinent le ROAS",
+        "Détecter les audiences émergentes rentables et y allouer du budget sans attendre",
+        "Empêcher le chevauchement entre campagnes qui font monter le CPM artificiellement",
+        "Aligner la stratégie d'audience sur la saisonnalité du métier, pas sur des intuitions",
+      ]},
+      { name: "A/B testing auto", desc: "Rotation automatique des créas et copies selon performance", result: "CTR moyen +42%", freq: "Continu", details: [
+        "Mettre en pause les mauvaises créas dans les 24h au lieu de 7 jours",
+        "Promouvoir les gagnantes sans intervention humaine — scaling immédiat",
+        "Accumuler un historique structuré des gains par type de créa (UGC, motion, statique)",
+        "Protéger le budget en évitant les \"sunk cost\" sur des créas qui ne performent plus",
+      ]},
+      { name: "Rédaction landing pages", desc: "Pages de capture optimisées par type de service (mono/multi/gainable)", result: "8 pages actives", freq: "Mensuel", details: [
+        "Faire matcher le message de l'ad et de la page — plus de drop à la page de capture",
+        "Spécialiser une page par typologie de projet, au lieu d'une page générique qui convertit mal",
+        "Itérer les pages sur la donnée réelle plutôt que sur les goûts de l'agence",
+        "Déployer une nouvelle offre en 48h avec sa page dédiée, pas en 3 semaines",
+      ]},
+      { name: "Budget pacing", desc: "Répartition automatique du budget entre campagnes selon ROAS", result: "ROAS : 2,8x → 7,9x", freq: "Quotidien", details: [
+        "Arbitrer le budget en temps réel entre campagnes, plus besoin d'un media buyer dédié",
+        "Protéger les campagnes qui scalent, limiter celles qui saturent",
+        "Éviter les fins de mois catastrophiques où le budget a brûlé sans ROI",
+        "Rendre les arbitrages traçables : on sait exactement pourquoi telle campagne a reçu plus",
+      ]},
+      { name: "Gestion Google My Business", desc: "Réponses avis + posts optimisés + photos chantier", result: "4,8 ★ (312 avis)", freq: "Quotidien", details: [
+        "Chaque avis Google reçoit une réponse professionnelle et personnalisée en moins de 2h — signal de sérieux que les prospects voient en premier",
+        "Générer en continu de nouveaux avis 5 étoiles sans processus manuel : l'invitation part automatiquement après chaque intervention",
+        "La note Google est le premier filtre qu'un prospect applique avant d'appeler — passer de 3,2 à 4,8 c'est une conversion doublée à budget constant",
+        "312 avis collectés en 12 mois sans qu'un humain passe une seule minute à les solliciter manuellement",
+      ]},
+    ],
+  },
+  ventes: {
+    key: "ventes",
+    label: "Ventes",
+    icon: "sales",
+    color: "oklch(0.78 0.13 155)",
+    colorSoft: "oklch(0.78 0.13 155 / 0.12)",
+    tagline: "Des leads sans process commercial, c'est un seau percé.",
+    why: "On a construit 7 automations sur ce pilier parce que c'est là que se jouent directement les revenus. Chaque point de closing gagné vaut des dizaines de milliers d'euros à l'échelle. On a structuré le pilier en 3 niveaux : qualifier avant le contact, optimiser pendant l'appel, relancer intelligemment après.",
+    problems: [
+      { t: "No-show rate à 35 %", d: "Un tiers des RDV ne se présentent pas — temps commercial et créneau technicien perdus" },
+      { t: "Leads non qualifiés", d: "Commerciaux rappelant des locataires sans budget, pendant 20 min par appel inutile" },
+      { t: "Closing à 8 % sur RDV effectif", d: "Aucun feedback sur les appels, pas de formation continue, chaque commercial dans sa bulle" },
+      { t: "Devis en 45 min / unité", d: "Au volume actuel de 56 deals/mois, ça représentait 42 heures de production manuelle de devis" },
+    ],
+    impact: [
+      { label: "No-show rate", from: "35 %", to: "18 %" },
+      { label: "Taux de closing (RDV effectif)", from: "8 %", to: "13 %" },
+      { label: "Taux de contact leads", from: "~45 %", to: "89 %" },
+      { label: "Panier moyen", from: "3 300 €", to: "5 818 €" },
+    ],
+    automations: [
+      { name: "Qualification leads IA", desc: "Scoring automatique budget/urgence/surface + priorisation pipeline", result: "1 067 leads scorés/mois", freq: "Temps réel", details: [
+        "Les commerciaux passent leur temps uniquement sur les leads qui ont le budget, l'urgence et la configuration — fini les appels de 20 minutes pour un locataire sans budget",
+        "Pipeline propre + prévisions de CA fiables : quand chaque deal a un score, Thomas sait exactement ce qu'il va facturer dans 30 jours",
+        "Identifier et prioriser automatiquement les leads gainable à fort panier — les meilleurs leads remontent en haut de la liste chaque matin",
+        "Taux de contact utile de 89% : sur 1 067 leads scorés par mois, l'équipe sait exactement sur qui concentrer l'énergie",
+      ]},
+      { name: "Setting automatisé", desc: "SMS + email + WhatsApp conversationnel pour prise de RDV", result: "Taux contact : 89%", freq: "Temps réel", details: [
+        "Joindre chaque lead dans les 90 secondes — le taux de conversion chute de 80% après 5 minutes d'attente",
+        "Multi-canal : relancer par SMS celui qui n'a pas répondu à l'email, par WhatsApp celui qui préfère ce canal",
+        "Libérer les commerciaux du travail de setter : 100% de leur temps sur le closing, 0% sur la chasse",
+        "Traçabilité complète de chaque conversation, plus de \"je croyais qu'on s'était parlé\"",
+      ]},
+      { name: "Analyse appels closing", desc: "Transcription + scoring commercial + recommandations personnalisées", result: "342 appels analysés", freq: "Post-appel", details: [
+        "Chaque commercial reçoit un feedback structuré après chaque appel — amélioration mesurable semaine après semaine",
+        "Détecter les objections récurrentes et construire des scripts de réponse qui augmentent le closing",
+        "Identifier les meilleurs commerciaux et comprendre précisément ce qu'ils font différemment",
+        "Onboarder un nouveau commercial en 2 semaines au lieu de 2 mois en lui donnant les patterns des top performers",
+      ]},
+      { name: "Relances intelligentes", desc: "Séquences personnalisées par profil et stade du pipeline", result: "+18% taux closing", freq: "Automatique", details: [
+        "Aucun deal n'est oublié : chaque prospect est relancé au bon moment avec le bon message",
+        "Segmentation fine : un prospect chaud et un prospect froid ne reçoivent pas la même séquence",
+        "Arrêter intelligemment les relances quand c'est mort — respecter le prospect et protéger la marque",
+        "Réactiver automatiquement les deals \"perdus\" qui reviennent sur le marché 6 mois plus tard",
+      ]},
+      { name: "Génération devis", desc: "Devis auto-générés (mono/multi/gainable) selon qualification", result: "102 devis en pipeline", freq: "Temps réel", details: [
+        "Réduire le temps de production d'un devis de 45 min à 3 min — 42h/mois récupérées au volume actuel",
+        "Zéro erreur de pricing : les grilles à jour sont appliquées automatiquement, pas de calcul à la main",
+        "Devis envoyé dans l'heure après le RDV, quand le prospect est encore chaud",
+        "Homogénéité totale : tous les devis ont la même qualité, peu importe qui les produit",
+      ]},
+      { name: "Prédiction closing", desc: "Score probabilité de signature par deal + alerte deals chauds", result: "Précision : 74%", freq: "Quotidien", details: [
+        "Concentrer les efforts sur les deals qui vont vraiment signer, pas ceux qui ont juste l'air prometteurs",
+        "Alerter le manager sur les deals à fort potentiel qui perdent de la vitesse — action avant qu'il ne soit trop tard",
+        "Prévoir le CA des 30 prochains jours avec 74% de précision, donc piloter recrutement et achats en confiance",
+        "Identifier les deals zombies qui pourrissent le pipeline et doivent être fermés proprement",
+      ]},
+      { name: "Upsell automatique", desc: "Détection opportunités upgrade mono→multi ou multi→gainable", result: "Panier +34% en 12 mois", freq: "Par devis", details: [
+        "Proposer systématiquement l'upgrade pertinent — plus de deals mono quand le gainable était possible",
+        "Fournir au commercial les arguments exacts pour justifier l'upgrade : aides, ROI, confort",
+        "Augmenter le panier moyen sans augmenter le coût d'acquisition — levier le plus rentable",
+        "Mesurer précisément la conversion d'upsell pour investir dans la formation sur les bons angles",
+      ]},
+    ],
+  },
+  delivery: {
+    key: "delivery",
+    label: "Delivery",
+    icon: "check",
+    color: "oklch(0.70 0.14 280)",
+    colorSoft: "oklch(0.70 0.14 280 / 0.12)",
+    tagline: "La croissance se construit sur des clients qui reviennent et qui recommandent.",
+    why: "On a construit 6 automations sur la Delivery parce que la croissance sans rétention est une illusion. Chaque client livré est un actif : un contrat maintenance, une recommandation, un avis Google potentiel. On a systématisé tout ce qui permettait de transformer un chantier one-shot en relation long terme.",
+    problems: [
+      { t: "Planning techniciens non optimisé", d: "40% du temps de déplacement en heures perdues — capacité de facturation bridée sans recruter" },
+      { t: "Dossiers CEE à 61% d'acceptation", d: "39% de rejets = primes perdues, re-travail, image de sérieux dégradée auprès des organismes" },
+      { t: "Zéro suivi satisfaction", d: "Les clients mécontents partaient sans qu'on le sache — les avis négatifs s'accumulaient silencieusement" },
+      { t: "Contrats maintenance = 0", d: "Aucun revenu récurrent, 100% de la facturation dépendait de nouveaux chantiers chaque mois" },
+    ],
+    impact: [
+      { label: "Temps trajet techniciens", from: "base", to: "-22 %" },
+      { label: "Taux acceptation CEE", from: "61 %", to: "94 %" },
+      { label: "Contrats maintenance actifs", from: "0", to: "78" },
+      { label: "Note Google", from: "3,2 ★", to: "4,8 ★ (312 avis)" },
+    ],
+    automations: [
+      { name: "Onboarding client auto", desc: "Séquence bienvenue + récap devis + planning technicien", result: "56 onboardings/mois", freq: "Par signature", details: [
+        "Aucun blanc entre la signature et l'intervention — le client se sent suivi dès le premier jour",
+        "Préparer le terrain pour les avis et les recommandations dès le début de la relation",
+        "Éliminer les appels \"où en est mon dossier ?\" qui saturent le support",
+        "Activer un client vers le contrat maintenance dès l'onboarding, pas 12 mois plus tard",
+      ]},
+      { name: "Planning interventions", desc: "Optimisation planning techniciens par zone géographique", result: "-22% temps trajet", freq: "Quotidien", details: [
+        "-22% de temps de trajet = +22% de capacité de facturation sur la même équipe, sans recruter",
+        "Les techniciens font plus d'interventions par jour sans rouler davantage — productivité augmentée, fatigue réduite, turnover maîtrisé",
+        "Chaque soir, le planning du lendemain est optimisé par zone géographique et type d'intervention — plus de Lyon-Nord le matin et Lyon-Sud l'après-midi pour le même technicien",
+        "Scalabilité immédiate : ajouter un nouveau technicien ne crée pas de chaos dans le planning, l'IA l'intègre automatiquement",
+      ]},
+      { name: "Suivi satisfaction", desc: "Enquête auto post-intervention + demande avis Google", result: "4,8 ★ (312 avis)", freq: "Post-chantier", details: [
+        "Détecter les clients mécontents en 24h au lieu de lire un avis négatif 2 semaines plus tard",
+        "Capitaliser sur les clients satisfaits : demande d'avis systématique au pic d'enthousiasme",
+        "Alimenter le référencement local en continu — chaque avis est un signal pour Google",
+        "Transformer une intervention ratée en opportunité de fidélisation grâce à la détection précoce",
+      ]},
+      { name: "Support client IA", desc: "Chatbot FAQ technique + escalade intelligente vers technicien", result: "62% résolu sans humain", freq: "Temps réel", details: [
+        "Les questions récurrentes (notice, utilisation, facturation) sont traitées 24/7 sans mobiliser de technicien",
+        "Escalade intelligente : seuls les vrais problèmes techniques remontent, avec le contexte déjà préparé",
+        "Réduire le coût support tout en améliorant le temps de réponse perçu par le client",
+        "Capturer les motifs d'appel pour améliorer la documentation produit et les offres futures",
+      ]},
+      { name: "Rappels maintenance", desc: "Notifications entretien annuel + re-travail contrat", result: "78 contrats actifs", freq: "Automatique", details: [
+        "Transformer un chantier one-shot en revenu récurrent — 78 contrats actifs partis de zéro",
+        "Proposer le contrat au bon moment : après une intervention réussie, pas par email froid",
+        "Stabiliser le cash-flow avec du revenu récurrent prévisible, moins de dépendance aux pics d'acquisition",
+        "Augmenter la valeur vie client de 20% sans augmenter le coût d'acquisition",
+      ]},
+      { name: "Dossier CEE automatisé", desc: "Pré-remplissage dossiers CEE pour chaque installation éligible", result: "94% taux acceptation", freq: "Par chantier", details: [
+        "94% d'acceptation = primes réellement touchées, crédibilité renforcée auprès des organismes",
+        "Le client touche sa prime sans paperasse — argument commercial différenciant au moment du devis",
+        "Zéro dossier oublié : tous les chantiers éligibles sont traités, plus de perte d'argent silencieuse",
+        "Réduire le temps de back-office de 3h à 20 min par dossier, technicien concentré sur le terrain",
+      ]},
+    ],
+  },
+  reporting: {
+    key: "reporting",
+    label: "Reporting",
+    icon: "overview",
+    color: "oklch(0.72 0.13 220)",
+    colorSoft: "oklch(0.72 0.13 220 / 0.12)",
+    tagline: "On ne pilote pas une machine à 325 000€/mois à l'instinct.",
+    why: "On a construit 5 automations de Reporting parce que le Reporting est le système nerveux de l'infrastructure entière. Sans données fraîches, les 4 autres piliers pilotent à l'aveugle. On a conçu chaque couche — alertes temps réel, rapports hebdos, forecast CA — pour que chaque décision, qu'elle soit opérationnelle ou stratégique, repose sur de l'information vérifiée.",
+    problems: [
+      { t: "Données vieilles de 3 à 5 jours", d: "Les anomalies (CPL qui monte, leads qui chutent) détectées en retard = jours de budget gaspillés" },
+      { t: "Aucun système d'alerte", d: "Une semaine de fatigue créative ou d'audience épuisée pouvait durer des semaines sans être vu" },
+      { t: "Prévisions = intuition", d: "Thomas ne pouvait pas planifier ses recrutements ni ses achats de matériel sur des bases solides" },
+      { t: "Valeur agence non documentée", d: "Sans rapport mensuel clair, la relation commerciale reposait sur la confiance, pas sur les preuves" },
+    ],
+    impact: [
+      { label: "Anomalies détectées & traitées", from: "0 (pas de suivi)", to: "23 en 12 mois" },
+      { label: "Précision forecast CA", from: "—", to: "± 8 %" },
+      { label: "Rapports hebdos envoyés", from: "0 (manuel)", to: "52 automatiques" },
+      { label: "Temps décision vs anomalie", from: "3-5 jours", to: "< 4 heures" },
+    ],
+    automations: [
+      { name: "Dashboard temps réel", desc: "Agrégation Meta Ads + GHL + données terrain dans un dashboard unifié", result: "Mis à jour en continu", freq: "Temps réel", details: [
+        "Une source de vérité unique : plus de data qui diverge entre Meta, le CRM et les techniciens",
+        "Tout le monde regarde les mêmes chiffres au même moment — fini les réunions à débattre des chiffres",
+        "Détecter instantanément une anomalie dans l'un des piliers — alerter avant que ça dégénère",
+        "Réduire le temps de préparation des comités de pilotage de 4h à 20 min",
+      ]},
+      { name: "Rapport hebdo client", desc: "Envoi automatique récapitulatif performance au gérant", result: "52 rapports envoyés", freq: "Hebdo", details: [
+        "Le client voit la valeur chaque semaine, sans avoir à la demander — fin du \"je ne sais pas ce qu'ils font pour moi\"",
+        "Chaque chiffre contextualisé : variation vs semaine précédente, vs objectif, vs benchmark saison",
+        "Préparer la réunion mensuelle en 10 min au lieu de 2h — le rapport résume déjà tout",
+        "Protéger le contrat : un client qui voit sa valeur chaque semaine ne résilie pas sur un coup de tête",
+      ]},
+      { name: "Alertes anomalies", desc: "Détection hausse CPL, chute leads, baisse conversion, fatigue créa", result: "23 alertes traitées", freq: "Temps réel", details: [
+        "Intervenir en 4 heures sur une anomalie au lieu de la découvrir 4 jours plus tard lors du point hebdo — l'écart de coût entre les deux peut atteindre plusieurs milliers d'euros",
+        "Stopper un problème de fatigue créative avant qu'il ne coûte des semaines de budget mal optimisé — le seuil de fréquence est surveillé en continu",
+        "Protéger le budget ads contre les dérives silencieuses : un CPL qui monte de 40€ à 62€ en 48h est détecté et corrigé avant de devenir la nouvelle norme",
+        "Dormir sereinement : le système surveille 24h/7 tous les seuils de performance définis — aucune anomalie ne passe inaperçue le week-end",
+      ]},
+      { name: "Prévisions CA", desc: "Forecast 30/60/90 jours basé sur pipeline + saisonnalité", result: "Précision ± 8%", freq: "Quotidien", details: [
+        "Planifier recrutements, achats matériel et trésorerie sur des chiffres fiables — plus de surprises fin de mois",
+        "Identifier 60 jours à l'avance un creux de CA et activer les leviers nécessaires",
+        "Donner au banquier/investisseur des projections défendables avec méthodologie documentée",
+        "Mesurer l'écart forecast vs réel mois après mois pour améliorer continuellement le modèle",
+      ]},
+      { name: "Rapport mensuel agence", desc: "Récapitulatif complet avec rev share, ROI, recommandations", result: "13 rapports générés", freq: "Mensuel", details: [
+        "Documenter noir sur blanc la valeur créée chaque mois — aucune ambiguïté sur le ROI agence",
+        "Transformer chaque rapport en levier de renégociation ou d'upsell de scope",
+        "Capitaliser la connaissance : 12 mois de rapports = playbook éprouvé pour les prochains clients",
+        "Donner au gérant un artefact qu'il peut partager à son board, ses associés ou son banquier",
+      ]},
+    ],
+  },
+};
+
+function ScreenArchitecture() {
+  const [active, setActive] = React.useState("acquisition");
+  const [openAuto, setOpenAuto] = React.useState(null);
+  const pillar = PILLARS[active];
+  const orderedKeys = ["offre", "acquisition", "ventes", "delivery", "reporting"];
+
+  React.useEffect(() => { setOpenAuto(null); }, [active]);
+
+  return (
+    <div className="stack-lg fade-up" style={{ paddingBottom: 40 }}>
+      {/* Hero */}
+      <div style={{ textAlign: "center", padding: "20px 0 10px" }}>
+        <div className="small" style={{ color: "var(--accent)", letterSpacing: "0.2em", fontWeight: 700, marginBottom: 12 }}>
+          INFRASTRUCTURE
+        </div>
+        <h2 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 42,
+          fontWeight: 700,
+          letterSpacing: "-0.03em",
+          margin: "0 0 10px",
+          color: "var(--text)"
+        }}>
+          Ce que tu <span style={{ color: pillar.color }}>déploies</span>.
+        </h2>
+        <div className="small muted" style={{ fontSize: 13.5 }}>
+          Clique sur un pilier pour voir les automations et leur impact mesuré sur 12 mois.
+        </div>
+      </div>
+
+      {/* Top nodes */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, position: "relative" }}>
+        <div style={{
+          padding: "8px 16px", borderRadius: 99,
+          border: "1px solid var(--border)", background: "var(--surface)",
+          fontSize: 12.5, fontWeight: 500
+        }}>
+          Dashboard client
+        </div>
+        <div style={{ width: 1, height: 14, background: "var(--border)" }}/>
+        <div style={{
+          padding: "8px 16px", borderRadius: 99,
+          border: "1px solid var(--border)", background: "var(--surface)",
+          fontSize: 12.5, fontWeight: 500
+        }}>
+          Telegram / WhatsApp
+        </div>
+        <div style={{ width: 1, height: 14, background: "var(--border)" }}/>
+        <div style={{
+          padding: "10px 22px", borderRadius: 99,
+          border: "1.5px solid " + pillar.color,
+          background: pillar.colorSoft,
+          color: pillar.color,
+          fontSize: 13, fontWeight: 700, letterSpacing: "0.1em",
+          boxShadow: `0 0 0 6px ${pillar.colorSoft}`,
+        }}>
+          ORCHESTRATEUR IA
+        </div>
+      </div>
+
+      {/* Connector lines + pillars */}
+      <div style={{ position: "relative" }}>
+        <svg width="100%" height="32" style={{ display: "block", marginBottom: -4 }} preserveAspectRatio="none" viewBox="0 0 1000 32">
+          <path d="M 500 0 L 500 14 L 100 14 L 100 32" stroke="var(--border)" fill="none"/>
+          <path d="M 500 14 L 300 14 L 300 32" stroke="var(--border)" fill="none"/>
+          <path d="M 500 14 L 500 32" stroke="var(--border)" fill="none"/>
+          <path d="M 500 14 L 700 14 L 700 32" stroke="var(--border)" fill="none"/>
+          <path d="M 500 14 L 900 14 L 900 32" stroke="var(--border)" fill="none"/>
+        </svg>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14 }}>
+          {orderedKeys.map(k => {
+            const p = PILLARS[k];
+            const isActive = k === active;
+            return (
+              <button
+                key={k}
+                onClick={() => setActive(k)}
+                style={{
+                  border: "1px solid " + (isActive ? p.color : "var(--border-soft)"),
+                  borderRadius: 14,
+                  padding: "18px 16px",
+                  background: isActive
+                    ? `linear-gradient(180deg, ${p.colorSoft}, transparent 80%), var(--surface)`
+                    : "var(--surface)",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  position: "relative",
+                  boxShadow: isActive ? `0 0 0 3px ${p.colorSoft}` : "var(--shadow-1)",
+                }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  background: p.colorSoft, color: p.color,
+                  display: "grid", placeItems: "center",
+                  margin: "0 auto 10px",
+                }}>
+                  <Icon name={p.icon} size={18}/>
+                </div>
+                <div style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 13, fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "var(--text)",
+                  marginBottom: 6
+                }}>
+                  {p.label}
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--text-3)", minHeight: 48, lineHeight: 1.5 }}>
+                  {p.tagline.split(".")[0].length < 50 ? p.tagline : {
+                    offre: "Positionnement, pricing dynamique, veille concurrentielle.",
+                    acquisition: "Leads qualifiés en continu via Ads et organique.",
+                    ventes: "Transformer les leads en clients signés.",
+                    delivery: "Livraison, satisfaction client, avis Google.",
+                    reporting: "KPIs temps réel, alertes, preuves de ROI.",
+                  }[k]}
+                </div>
+                <div style={{ marginTop: 12, display: "flex", gap: 4, justifyContent: "center", flexWrap: "wrap", minHeight: 20 }}>
+                  {{
+                    offre: ["Veille", "Pricing"],
+                    acquisition: ["Content", "Ads"],
+                    ventes: ["Setting", "Closing"],
+                    delivery: ["Onboard", "Support"],
+                    reporting: ["KPIs", "Alertes"],
+                  }[k].map(chip => (
+                    <span key={chip} style={{
+                      fontSize: 10.5, padding: "2px 7px", borderRadius: 99,
+                      background: isActive ? p.color : "var(--surface-2)",
+                      color: isActive ? "var(--accent-ink)" : "var(--text-3)",
+                      fontWeight: 500,
+                    }}>{chip}</span>
+                  ))}
+                </div>
+                <div style={{
+                  marginTop: 12,
+                  fontSize: 11, color: isActive ? p.color : "var(--text-3)",
+                  padding: "4px 10px",
+                  border: "1px solid " + (isActive ? p.color : "var(--border-soft)"),
+                  borderRadius: 99, display: "inline-block",
+                  fontWeight: 600,
+                }}>
+                  {p.automations.length} automations
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Detail panel */}
+      <div style={{
+        border: "1px solid " + pillar.color,
+        borderRadius: 16,
+        background: `linear-gradient(180deg, ${pillar.colorSoft}, transparent 30%), var(--surface)`,
+        padding: 28,
+      }}>
+        <div className="row between" style={{ alignItems: "flex-start", marginBottom: 24, gap: 24 }}>
+          <div style={{ flex: 1 }}>
+            <span className="tag" style={{
+              background: pillar.colorSoft,
+              color: pillar.color,
+              borderColor: pillar.color,
+              fontSize: 11,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              padding: "3px 10px",
+            }}>
+              <Icon name={pillar.icon} size={10}/> {pillar.label}
+            </span>
+            <div style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 17, fontWeight: 600,
+              marginTop: 10, fontStyle: "italic",
+              color: "var(--text)"
+            }}>
+              {pillar.tagline}
+            </div>
+          </div>
+          <div style={{
+            textAlign: "center",
+            border: "1px solid " + pillar.color,
+            borderRadius: 12,
+            padding: "14px 20px",
+            background: pillar.colorSoft,
+            minWidth: 140,
+          }}>
+            <div style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 32, fontWeight: 800,
+              color: pillar.color, lineHeight: 1,
+            }}>
+              {pillar.automations.length}
+            </div>
+            <div style={{ fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: pillar.color, marginTop: 6, fontWeight: 600 }}>
+              Automations actives
+            </div>
+          </div>
+        </div>
+
+        <div className="grid g-2" style={{ gap: 28, marginBottom: 24 }}>
+          <div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 14 }}>
+              Problèmes identifiés
+            </div>
+            <div className="stack-md">
+              {pillar.problems.map((p, i) => (
+                <div key={i} className="row" style={{ gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: pillar.color, marginTop: 7, flexShrink: 0 }}/>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: "var(--text)", marginBottom: 2 }}>{p.t}</div>
+                    <div className="small muted" style={{ lineHeight: 1.5 }}>{p.d}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 14 }}>
+              Pourquoi on a construit ça comme ça
+            </div>
+            <div style={{
+              padding: 16,
+              border: "1px solid var(--border-soft)",
+              borderRadius: 10,
+              background: "var(--bg-2)",
+              fontSize: 12.5, lineHeight: 1.65, color: "var(--text-2)",
+            }}>
+              {pillar.why}
+            </div>
+            <div style={{ fontSize: 10.5, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, margin: "20px 0 12px" }}>
+              Impact mesuré sur 12 mois
+            </div>
+            <div className="grid g-2" style={{ gap: 10 }}>
+              {pillar.impact.map((im, i) => (
+                <div key={i} style={{
+                  padding: 12,
+                  border: "1px solid var(--border-soft)",
+                  borderRadius: 10,
+                  background: "var(--bg-2)",
+                }}>
+                  <div className="small muted" style={{ fontSize: 10.5, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6, fontWeight: 600 }}>
+                    {im.label}
+                  </div>
+                  <div className="mono" style={{ fontSize: 13, color: "var(--text)" }}>
+                    <span className="muted">{im.from}</span>
+                    <span style={{ margin: "0 6px", color: pillar.color }}>→</span>
+                    <strong style={{ color: pillar.color }}>{im.to}</strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Automations grid */}
+        <div>
+          <div className="row between" style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: pillar.color }}>
+              <Icon name={pillar.icon} size={12}/> Les {pillar.automations.length} automations du pilier {pillar.label}
+            </div>
+            <div className="small muted">Clique sur une automation pour voir ses avantages client</div>
+          </div>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+            {pillar.automations.map((a, i) => (
+              <button
+                key={i}
+                onClick={() => setOpenAuto(openAuto === i ? null : i)}
+                style={{
+                  textAlign: "left",
+                  padding: 14,
+                  border: "1px solid " + (openAuto === i ? pillar.color : "var(--border-soft)"),
+                  borderRadius: 12,
+                  background: openAuto === i ? pillar.colorSoft : "var(--bg-2)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, color: "var(--text)" }}>{a.name}</div>
+                <div className="small muted" style={{ fontSize: 11.5, lineHeight: 1.5, marginBottom: 10, minHeight: 36 }}>{a.desc}</div>
+                <div className="mono" style={{ fontSize: 12, color: pillar.color, fontWeight: 600, marginBottom: 10 }}>
+                  {a.result}
+                </div>
+                <div className="row between">
+                  <span className="tag" style={{ fontSize: 10, padding: "1px 8px" }}>{a.freq}</span>
+                  <span className="small" style={{ fontSize: 10.5, color: "var(--success)" }}>● Actif</span>
+                </div>
+                <div className="small" style={{
+                  marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border-soft)",
+                  color: openAuto === i ? pillar.color : "var(--text-3)",
+                  fontSize: 11, textAlign: "right", fontWeight: 500,
+                }}>
+                  {openAuto === i ? "▲ Masquer" : "Voir les avantages ▼"}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {openAuto !== null && (
+            <div className="fade-up" style={{
+              marginTop: 18,
+              padding: 22,
+              border: "1px solid " + pillar.color,
+              borderRadius: 14,
+              background: pillar.colorSoft,
+            }}>
+              <div className="row between" style={{ marginBottom: 14, alignItems: "flex-start", gap: 20 }}>
+                <div>
+                  <span className="tag" style={{
+                    background: pillar.color, color: "var(--accent-ink)", borderColor: "transparent",
+                    fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700
+                  }}>
+                    <Icon name={pillar.icon} size={10}/> {pillar.label}
+                  </span>
+                  <div style={{
+                    fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700,
+                    marginTop: 8, letterSpacing: "-0.01em", color: "var(--text)"
+                  }}>
+                    {pillar.automations[openAuto].name}
+                  </div>
+                  <div className="small muted" style={{ marginTop: 4 }}>
+                    {pillar.automations[openAuto].desc} · <strong style={{ color: pillar.color }}>{pillar.automations[openAuto].freq}</strong>
+                  </div>
+                </div>
+                <div style={{
+                  textAlign: "right",
+                  border: "1px solid " + pillar.color,
+                  borderRadius: 10, padding: "10px 16px",
+                  background: "var(--bg-2)", minWidth: 140,
+                }}>
+                  <div className="small" style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: pillar.color, fontWeight: 700, marginBottom: 4 }}>
+                    Résultat mesuré
+                  </div>
+                  <div className="mono" style={{ fontSize: 16, fontWeight: 700, color: pillar.color }}>
+                    {pillar.automations[openAuto].result}
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, marginBottom: 12 }}>
+                Ce que cette automation change concrètement pour le client
+              </div>
+              <div className="grid g-2" style={{ gap: 10 }}>
+                {pillar.automations[openAuto].details.map((d, i) => (
+                  <div key={i} style={{
+                    padding: 14,
+                    border: "1px solid var(--border-soft)",
+                    borderRadius: 10,
+                    background: "var(--bg-2)",
+                    fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)",
+                    display: "flex", gap: 10, alignItems: "flex-start",
+                  }}>
+                    <span style={{
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: pillar.color, marginTop: 7, flexShrink: 0
+                    }}/>
+                    <span>{d}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.ScreenArchitecture = ScreenArchitecture;
+
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+
+/* App shell + sidebar + routing — modified to consume AuthGate props */
+
+function buildNav(isAdmin) {
+  const nav = [
+    { group: "Tableau de bord", items: [
+      { id: "overview",    label: "Vue d'ensemble", icon: "overview" },
+      { id: "acquisition", label: "Acquisition",    icon: "acquisition" },
+      { id: "sales",       label: "Ventes",         icon: "sales" },
+    ]},
+    { group: "Intelligence", items: [
+      { id: "ai", label: "Activité IA", icon: "ai", badge: "Live" },
+    ]},
+    { group: "Infrastructure", items: [
+      { id: "architecture", label: "Architecture", icon: "integrations" },
+    ]},
+    { group: "Écosystème", items: [
+      { id: "customers",    label: "CRM",          icon: "customers" },
+      { id: "integrations", label: "Intégrations", icon: "integrations" },
+    ]},
+  ];
+  if (isAdmin) {
+    nav[1].items.push({ id: "automations", label: "Automations", icon: "automations" });
+  }
+  return nav;
+}
+
+const SCREEN_META = {
+  overview:     { title: "Vue d'ensemble", sub: "Performance globale · 12 derniers mois", breadcrumb: "Tableau de bord" },
+  acquisition:  { title: "Acquisition",    sub: "Leads, canaux, campagnes et funnel",     breadcrumb: "Tableau de bord" },
+  sales:        { title: "Ventes",         sub: "Performance commerciale et CA signé",    breadcrumb: "Tableau de bord" },
+  ai:           { title: "Activité IA",    sub: "Agent HelpAi",                            breadcrumb: "Intelligence" },
+  automations:  { title: "Automations",    sub: "Workflows et déclencheurs",               breadcrumb: "Intelligence" },
+  customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
+  architecture: { title: "Architecture",   sub: "Infrastructure HelpAi — 5 piliers",        breadcrumb: "Infrastructure" },
+  integrations: { title: "Intégrations",   sub: "Services connectés à votre espace",       breadcrumb: "Écosystème" },
+};
+
+const EditContext = window.__HelpAi_EditContext || React.createContext({ editing: false });
+window.__HelpAi_EditContext = EditContext;
+
+function App({ isAdmin, displayName, userClient, onLogout }) {
+  const [theme, setTheme] = React.useState(() => localStorage.getItem('theme') || 'dark');
+  const [workspace, setWorkspace] = React.useState(isAdmin ? 'agency' : 'client');
+  const [editMode, setEditMode] = React.useState(false);
+  const [screen, setScreen] = React.useState("overview");
+
+  React.useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  React.useEffect(() => {
+    if (workspace === 'client' && screen === 'automations') setScreen('overview');
+  }, [workspace, screen]);
+
+  const meta = SCREEN_META[screen];
+  const isAgencyView = isAdmin && workspace === 'agency';
+  const editing = isAgencyView && editMode;
+
+  const renderScreen = () => {
+    switch (screen) {
+      case "overview":    return <ScreenOverview/>;
+      case "acquisition": return <ScreenAcquisition/>;
+      case "sales":       return <ScreenSales/>;
+      case "ai":          return <ScreenAI/>;
+      case "automations": return isAgencyView ? <ScreenAutomations/> : <ScreenOverview/>;
+      case "customers":   return <ScreenCustomers/>;
+      case "architecture":return <ScreenArchitecture/>;
+      case "integrations":return <ScreenIntegrations/>;
+      default:            return <ScreenOverview/>;
+    }
+  };
+
+  const NAV = buildNav(isAdmin);
+  const clientLeads = window.__HELPAI_LEADS_ROWS || [];
+  const unreadLeads = clientLeads.filter(l => l.statut === 'nouveau').length;
+
+  return (
+    <div className="app">
+      {/* ============ SIDEBAR ============ */}
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">HA</div>
+          <div>
+            <div className="brand-name">HelpAi Agency</div>
+            <div className="brand-sub">Business Copilot</div>
+          </div>
+        </div>
+
+        <div className="workspace-switch">
+          <div className="workspace-avatar">{(displayName || "??").slice(0,2).toUpperCase()}</div>
+          <div className="workspace-info">
+            <div className="workspace-name">{displayName || "—"}</div>
+            <div className="workspace-role">{isAdmin ? (workspace === 'agency' ? "Agence · Admin" : "Vue client") : "Espace client"}</div>
+          </div>
+          <Icon name="chevDown" size={14} className="workspace-chev"/>
+        </div>
+
+        {isAdmin && (
+          <div className="seg">
+            <button className={workspace === "client" ? "active" : ""} onClick={() => setWorkspace("client")}>Vue Client</button>
+            <button className={workspace === "agency" ? "active" : ""} onClick={() => setWorkspace("agency")}>Vue Agence</button>
+          </div>
+        )}
+
+        <div className="stack-md" style={{ flex: 1, overflow: "auto" }}>
+          {NAV.map((g, gi) => (
+            <div key={gi} className="nav-group">
+              <div className="nav-label">{g.group}</div>
+              {g.items.map(it => {
+                let badge = it.badge;
+                if (it.id === 'customers' && unreadLeads) badge = String(unreadLeads);
+                return (
+                  <div
+                    key={it.id}
+                    className={"nav-item " + (screen === it.id ? "active" : "")}
+                    onClick={() => setScreen(it.id)}
+                  >
+                    <Icon name={it.icon} size={16} className="nav-icon"/>
+                    <span>{it.label}</span>
+                    {badge && <span className="nav-badge">{badge}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        <div className="sidebar-footer">
+          <div className="plan-usage">
+            <span>{isAdmin ? "Admin Agence" : "Espace client"}</span>
+            <span className="mono">v1.0</span>
+          </div>
+          <div className="usage-bar"><div style={{ width: "100%" }}/></div>
+          <button className="btn ghost small" style={{ width:'100%', justifyContent:'center', marginTop: 10, height: 28 }} onClick={onLogout}>
+            Déconnexion
+          </button>
+        </div>
+      </aside>
+
+      {/* ============ MAIN ============ */}
+      <div className="main">
+        <div className="topbar">
+          <div className="crumbs">
+            <span>{meta.breadcrumb}</span>
+            <span className="crumb-sep">/</span>
+            <strong>{meta.title}</strong>
+          </div>
+          <div className="spacer"/>
+          <div className="search" onClick={() => {}}>
+            <Icon name="search" size={14}/>
+            <span>Chercher un lead, un client…</span>
+            <kbd>⌘K</kbd>
+          </div>
+          {isAdmin && (
+            <button
+              className={"btn " + (editMode ? "primary" : "")}
+              onClick={() => setEditMode(!editMode)}
+              title="Activer l'édition manuelle"
+            >
+              <Icon name={editMode ? "check" : "edit"} size={13}/>
+              {editMode ? "Terminer l'édition" : "Modifier"}
+            </button>
+          )}
+          <button className="btn icon ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Thème">
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={14}/>
+          </button>
+          <button className="btn icon ghost" title="Notifications"><Icon name="bell" size={14}/></button>
+          <span className={"av md av-colors-3"}>{(displayName || "??").slice(0,2).toUpperCase()}</span>
+        </div>
+
+        {editing && (
+          <div className="edit-banner">
+            <Icon name="edit" size={13}/>
+            <span><strong>Mode édition activé.</strong> Cliquez sur une valeur ou un nom pour l'éditer.</span>
+            <button className="btn small ghost" onClick={() => setEditMode(false)}>Quitter</button>
+          </div>
+        )}
+        <div className="page">
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">{meta.title}</h1>
+              <div className="page-sub">{meta.sub}</div>
+            </div>
+            <div className="page-actions">
+              <button className="btn" onClick={() => window.loadAllData && window.loadAllData({ isAdmin, clientId: userClient ? userClient.id : null }).then(()=>setScreen(s=>s))}>
+                <Icon name="refresh" size={13}/> Actualiser
+              </button>
+              <button className="btn"><Icon name="download" size={13}/> Exporter</button>
+            </div>
+          </div>
+          <EditContext.Provider value={{ editing }}>
+            {renderScreen()}
+          </EditContext.Provider>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.App = App;
+
+/* Mount */
+ReactDOM.createRoot(document.getElementById("root")).render(<AuthGate/>);
+
+  </script>
+</body>
+</html>
