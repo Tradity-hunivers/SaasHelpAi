@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=1400, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>HelpAi Agency — Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -5734,9 +5737,28 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
             <kbd>⌘K</kbd>
           </div>
           <div style={{ position: "relative" }}>
-            <button className="btn" onClick={() => setRangePickerOpen(o => !o)} title="Plage de dates" style={{ whiteSpace: "nowrap" }}>
-              <Icon name="calendar" size={13}/> {fmtRangeLabel(dateRange)}
-              <Icon name="chevDown" size={11} style={{ marginLeft: 4 }}/>
+            <button
+              onClick={() => setRangePickerOpen(o => !o)}
+              title="Plage de dates"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                height: 32, padding: "0 14px",
+                borderRadius: "var(--r-sm)",
+                fontSize: 12.5, fontWeight: 600,
+                background: "var(--accent-soft)",
+                color: "var(--accent)",
+                border: "1px solid var(--accent-border)",
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "filter 0.15s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.filter = "brightness(1.15)"}
+              onMouseLeave={e => e.currentTarget.style.filter = "none"}
+            >
+              <Icon name="calendar" size={13}/>
+              <span>{fmtRangeLabel(dateRange)}</span>
+              <Icon name="chevDown" size={11}/>
             </button>
             {rangePickerOpen && (
               <DateRangePopover current={dateRange} onApply={(r) => { setDateRange(r); setRangePickerOpen(false); }} onClose={() => setRangePickerOpen(false)}/>
