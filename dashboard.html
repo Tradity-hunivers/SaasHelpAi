@@ -1605,8 +1605,26 @@ async function loadAllData({ isAdmin, clientId }) {
   /* KPIS_B (secondary row) */
   const noShow = cur.taux_rdv ? Math.max(0, 100 - Number(cur.taux_rdv)) : 0;
   const pipeline = cur.pipeline || 0;
-  const noteMoy = cur.note_google || 0;
-  const nbAvis = cur.nb_avis_google || 0;
+  // Note moyenne / nb avis : prefer agency_kpis values, fall back to live agency_gmb_stats
+  // (the bot syncs reviews into agency_gmb_stats but doesn't always populate agency_kpis)
+  const gmbAgg = (gmbRows || []).reduce(
+    (acc, g) => {
+      const n = Number(g.nb_avis) || 0;
+      const r = Number(g.note_moyenne) || 0;
+      acc.totalAvis += n;
+      acc.totalAvis30j += Number(g.nb_avis_30j) || 0;
+      acc.weighted += r * n;
+      acc.locations += g.note_moyenne ? 1 : 0;
+      acc.unweightedSum += r;
+      return acc;
+    },
+    { totalAvis: 0, totalAvis30j: 0, weighted: 0, locations: 0, unweightedSum: 0 }
+  );
+  const gmbAvgRating = gmbAgg.totalAvis > 0
+    ? (gmbAgg.weighted / gmbAgg.totalAvis)
+    : (gmbAgg.locations > 0 ? gmbAgg.unweightedSum / gmbAgg.locations : 0);
+  const noteMoy = cur.note_google || gmbAvgRating || 0;
+  const nbAvis  = cur.nb_avis_google || gmbAgg.totalAvis || 0;
   const contratsActifs = clientsRows.filter(c => c.statut === 'actif').length;
 
   const KPIS_B = [
