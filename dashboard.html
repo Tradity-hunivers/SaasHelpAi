@@ -2603,6 +2603,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
   const [draft, setDraft]           = React.useState(null);
   const [saving, setSaving]         = React.useState(false);
   const [feedback, setFeedback]     = React.useState(null);
+  const [gmbPicker, setGmbPicker]   = React.useState({ open: false, loading: false, data: null, error: null, linking: null });
 
   const selected = allClients.find(c => c.id === selectedId) || null;
 
@@ -2673,6 +2674,59 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
     }
     setFeedback({ type: "ok", msg: "Modifications enregistrées" });
     if (onRefresh) onRefresh();
+  }
+
+  async function openGmbPicker() {
+    if (!selected) return;
+    setGmbPicker({ open: true, loading: true, data: null, error: null, linking: null });
+    try {
+      const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/dashboard-link-gmb", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list" }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        setGmbPicker({ open: true, loading: false, data: null, error: data.message || data.error || "Erreur de chargement", linking: null });
+        return;
+      }
+      setGmbPicker({ open: true, loading: false, data, error: null, linking: null });
+    } catch (e) {
+      setGmbPicker({ open: true, loading: false, data: null, error: String(e), linking: null });
+    }
+  }
+
+  async function linkGmbLocation(loc) {
+    if (!selected) return;
+    setGmbPicker(p => ({ ...p, linking: loc.gbpLocationId, error: null }));
+    try {
+      const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/dashboard-link-gmb", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "link",
+          agencyClientId: selected.id,
+          gbpLocationId: loc.gbpLocationId,
+          gbpAccountId: loc.gbpAccountId,
+          name: loc.title,
+          phone: loc.phone || null,
+          website: loc.website || null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        setGmbPicker(p => ({ ...p, linking: null, error: data.error + (data.details ? " — " + data.details : "") }));
+        return;
+      }
+      // Trigger initial sync (fire & forget)
+      fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/gmb-sync-reviews", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ establishmentId: data.establishmentId }),
+      }).catch(() => {});
+      setGmbPicker({ open: false, loading: false, data: null, error: null, linking: null });
+      setFeedback({ type: "ok", msg: "Fiche Google liée : " + loc.title + ". Sync des avis lancée — rafraîchis dans 30 s." });
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      setGmbPicker(p => ({ ...p, linking: null, error: String(e) }));
+    }
   }
 
   const totalActifs = allClients.filter(c => c.statut === "actif").length;
@@ -2812,6 +2866,9 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                         <option value={draft.gmb_client_id}>⚠ Slug saisi manuellement : {draft.gmb_client_id}</option>
                       )}
                     </select>
+                    <button className="btn small" type="button" onClick={openGmbPicker} style={{ marginTop: 6 }}>
+                      <Icon name="plus" size={12}/> Connecter une fiche Google (parcourir mon compte)
+                    </button>
                   </_AdminField>
                   <_AdminField label="Google Ads — Customer ID"
                                hint="Format 123-456-7890 (sans tirets aussi accepté).">
@@ -2879,6 +2936,73 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
           )}
         </div>
       </div>
+
+      {gmbPicker.open && (
+        <div onClick={() => setGmbPicker({ open: false, loading: false, data: null, error: null, linking: null })}
+             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "grid", placeItems: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()}
+               style={{ width: "min(720px, 100%)", maxHeight: "85vh", display: "flex", flexDirection: "column",
+                        background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14,
+                        boxShadow: "0 24px 60px rgba(0,0,0,0.55)" }}>
+            <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>Connecter une fiche Google Business</div>
+                <div className="small muted">Choisis la fiche à lier à <strong>{selected ? selected.nom : "—"}</strong>. La sync des avis se lance automatiquement.</div>
+              </div>
+              <button className="btn icon ghost" onClick={() => setGmbPicker({ open: false, loading: false, data: null, error: null, linking: null })}>×</button>
+            </div>
+
+            <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+              {gmbPicker.loading && <div className="muted small" style={{ textAlign: "center", padding: 40 }}>Chargement de tes fiches Google…</div>}
+              {gmbPicker.error && (
+                <div className="card" style={{ padding: 14, borderColor: "var(--danger)", color: "var(--danger)" }}>
+                  <div className="small">{gmbPicker.error}</div>
+                  {gmbPicker.error.indexOf("oauth") >= 0 && (
+                    <div className="small muted" style={{ marginTop: 8 }}>
+                      Va sur <a href="https://wodlupbffooqtshgasml.supabase.co/functions/v1/gmb-oauth" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>cette URL</a> avec le compte Google de l'agence pour autoriser, puis recharge.
+                    </div>
+                  )}
+                </div>
+              )}
+              {!gmbPicker.loading && !gmbPicker.error && gmbPicker.data && (
+                <div className="stack-md">
+                  {(gmbPicker.data.accounts || []).map((acc, i) => (
+                    <div key={i}>
+                      <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 10.5, marginBottom: 8, fontWeight: 600 }}>
+                        Compte : {acc.accountName}
+                      </div>
+                      <div className="stack-sm">
+                        {(acc.locations || []).length === 0 && <div className="muted small">Aucune fiche dans ce compte.</div>}
+                        {(acc.locations || []).map(loc => {
+                          const isLinking = gmbPicker.linking === loc.gbpLocationId;
+                          const alreadyLinked = (window.__HELPAI_GMB_CLIENT_LIST || []).some(g => g.gbp_location_id === loc.gbpLocationId);
+                          return (
+                            <div key={loc.gbpLocationId} className="row between"
+                                 style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10, background: "var(--bg-2)", gap: 12 }}>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{loc.title}</div>
+                                <div className="small muted">
+                                  {loc.phone && <>📞 {loc.phone} · </>}
+                                  {loc.website && <>🌐 {loc.website.replace(/^https?:\/\//, "").slice(0, 30)} · </>}
+                                  <span className="mono" style={{ fontSize: 10.5 }}>{loc.gbpLocationId.replace("locations/", "")}</span>
+                                </div>
+                              </div>
+                              {alreadyLinked && <span className="tag success">Déjà liée</span>}
+                              <button className="btn primary small" onClick={() => linkGmbLocation(loc)} disabled={isLinking || alreadyLinked}>
+                                {isLinking ? "Liaison…" : alreadyLinked ? "✓" : "Lier"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
