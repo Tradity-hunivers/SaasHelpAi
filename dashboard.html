@@ -3396,40 +3396,72 @@ function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
         </div>
       </form>
 
-      {/* Documents */}
-      {userClient && (
-        <div className="card">
-          <div className="card-head">
-            <div>
-              <div className="card-title">Mes documents</div>
-              <div className="card-sub">{docs.length} document{docs.length > 1 ? "s" : ""} partagé{docs.length > 1 ? "s" : ""} par l'agence.</div>
+      {/* Documents (grouped by category) */}
+      {userClient && (() => {
+        const groups = [];
+        const order = ["Rapports de performance GMB", "Autres rapports", "Contrats", "Audits", "Autres documents"];
+        const buckets = {
+          "Rapports de performance GMB": [],
+          "Autres rapports": [],
+          "Contrats": [],
+          "Audits": [],
+          "Autres documents": [],
+        };
+        docs.forEach(d => {
+          const nm = (d.nom || "").toLowerCase();
+          if (nm.startsWith("rapport de performance gmb") || nm.includes("performance gmb")) {
+            buckets["Rapports de performance GMB"].push(d);
+          } else if (d.type === "rapport") {
+            buckets["Autres rapports"].push(d);
+          } else if (d.type === "contrat") {
+            buckets["Contrats"].push(d);
+          } else if (d.type === "audit") {
+            buckets["Audits"].push(d);
+          } else {
+            buckets["Autres documents"].push(d);
+          }
+        });
+        order.forEach(k => { if (buckets[k].length) groups.push({ name: k, items: buckets[k] }); });
+
+        return (
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <div className="card-title">Mes documents</div>
+                <div className="card-sub">{docs.length} document{docs.length > 1 ? "s" : ""} partagé{docs.length > 1 ? "s" : ""} par l'agence.</div>
+              </div>
+            </div>
+            <div className="card-body stack-md">
+              {docsLoading && <div className="muted small">Chargement…</div>}
+              {!docsLoading && docs.length === 0 && <div className="muted small">Aucun document pour l'instant.</div>}
+              {!docsLoading && groups.map(g => (
+                <div key={g.name} className="stack-sm">
+                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+                    {g.name} <span style={{ color: "var(--text-3)" }}>· {g.items.length}</span>
+                  </div>
+                  <div className="stack-sm">
+                    {g.items.map(d => (
+                      <div key={d.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{d.nom}</div>
+                          <div className="small muted">
+                            {d.type}{d.taille_kb ? " · " + d.taille_kb + " KB" : ""} · {new Date(d.created_at).toLocaleDateString("fr-FR")}
+                          </div>
+                        </div>
+                        {d.drive_url ? (
+                          <a className="btn small" href={d.drive_url} target="_blank" rel="noopener noreferrer">
+                            <Icon name="external" size={12}/> Ouvrir
+                          </a>
+                        ) : <span className="small muted">Lien indisponible</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="card-body">
-            {docsLoading && <div className="muted small">Chargement…</div>}
-            {!docsLoading && docs.length === 0 && <div className="muted small">Aucun document pour l'instant.</div>}
-            {!docsLoading && docs.length > 0 && (
-              <div className="stack-sm">
-                {docs.map(d => (
-                  <div key={d.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{d.nom}</div>
-                      <div className="small muted">
-                        {d.type}{d.taille_kb ? " · " + d.taille_kb + " KB" : ""} · {new Date(d.created_at).toLocaleDateString("fr-FR")}
-                      </div>
-                    </div>
-                    {d.drive_url ? (
-                      <a className="btn small" href={d.drive_url} target="_blank" rel="noopener noreferrer">
-                        <Icon name="external" size={12}/> Ouvrir
-                      </a>
-                    ) : <span className="small muted">Lien indisponible</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Invoices */}
       {userClient && (
@@ -4434,6 +4466,32 @@ function ScreenAI() {
   const reports        = window.__HELPAI_GMB_REPORTS || [];
   const leads          = window.__HELPAI_LEADS_ROWS || [];
   const clients        = window.__HELPAI_CLIENTS_ROWS || [];
+
+  // Guard: when scoped to a single client (client view, or admin "view as client"),
+  // require their GMB to be connected. Otherwise show an empty-state CTA.
+  const scopedClient = clients.length === 1 ? clients[0] : null;
+  if (scopedClient && !scopedClient.gmb_client_id) {
+    return (
+      <div className="stack-lg fade-up">
+        <div className="card" style={{ padding: 48, textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, margin: "0 auto 16px", borderRadius: 14, background: "var(--accent-soft)", color: "var(--accent)", display: "grid", placeItems: "center" }}>
+            <Icon name="globe" size={26}/>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+            Connecte la fiche Google Business de {scopedClient.nom || "ce client"}
+          </div>
+          <div className="muted" style={{ fontSize: 13.5, lineHeight: 1.6, maxWidth: 540, margin: "0 auto 18px" }}>
+            L'activité IA (posts publiés, réponses aux avis, rapports de performance, photos) ne s'affichera ici qu'une fois la fiche Google connectée au dashboard.
+          </div>
+          <div className="row" style={{ gap: 8, justifyContent: "center" }}>
+            <button className="btn primary" onClick={() => { if (window.__HELPAI_setScreen) window.__HELPAI_setScreen("clients"); }}>
+              <Icon name="plus" size={13}/> Aller dans Admin → Clients
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const range = ((window.__HELPAI_RANGE && window.__HELPAI_RANGE.preset) || "12m").toLowerCase();
   const customStorageKey = "helpai_ai_actions::" + range;
@@ -5920,6 +5978,7 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
     window.__HELPAI_RANGE = dateRange;
     window.__HELPAI_setRangePreset = (preset) => setDateRange(rangeFromPreset(preset));
     window.__HELPAI_setRange = setDateRange;
+    window.__HELPAI_setScreen = setScreen;
   }, [dateRange, setDateRange]);
 
   React.useEffect(() => {
