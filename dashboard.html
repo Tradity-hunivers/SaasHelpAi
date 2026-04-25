@@ -1474,6 +1474,34 @@ async function loadAllData({ isAdmin, clientId }) {
     gmbReportsRows = data || [];
   } catch (e) { gmbReportsRows = []; }
 
+  /* scheduled_posts (Telegram bot post queue — client_id is text slug = gmb_clients.id) */
+  let scheduledPostsRows = [];
+  try {
+    // Resolve client_id -> gmb_client_id mapping when scoping for a single client
+    let scopedGmbClientIds = null;
+    if (clientFilter) {
+      const me = clientsRows.find(c => c.id === clientFilter);
+      if (me && me.gmb_client_id) scopedGmbClientIds = [me.gmb_client_id];
+      else scopedGmbClientIds = []; // client without gmb mapping → no rows
+    }
+    let qsp = sb.from('scheduled_posts').select('*').order('scheduled_at', { ascending: false }).limit(100);
+    if (scopedGmbClientIds !== null) {
+      if (scopedGmbClientIds.length === 0) qsp = qsp.eq('client_id', '__none__');
+      else qsp = qsp.in('client_id', scopedGmbClientIds);
+    }
+    const { data } = await qsp;
+    scheduledPostsRows = data || [];
+  } catch (e) { scheduledPostsRows = []; }
+
+  /* lsa_leads (Google Local Services Ads — admin only for now, no client mapping) */
+  let lsaLeadsRows = [];
+  if (isAdmin) {
+    try {
+      const { data } = await sb.from('lsa_leads').select('*').order('lead_created_at', { ascending: false }).limit(50);
+      lsaLeadsRows = data || [];
+    } catch (e) { lsaLeadsRows = []; }
+  }
+
   /* KPIs cumulés : filtrer source='total' */
   const totals = kpisRows.filter(k => k.source === 'total');
   const totalByMonth = {};
@@ -1740,6 +1768,9 @@ async function loadAllData({ isAdmin, clientId }) {
     __HELPAI_GMB_POSTS: gmbPostsRows,
     __HELPAI_GMB_REVIEWS: gmbReviewsRows,
     __HELPAI_GMB_REPORTS: gmbReportsRows,
+    __HELPAI_SCHEDULED_POSTS: scheduledPostsRows,
+    __HELPAI_LSA_LEADS: lsaLeadsRows,
+    __HELPAI_KPIS_ROWS: kpisRows,
   });
 }
 window.loadAllData = loadAllData;
@@ -1805,6 +1836,8 @@ function AuthGate() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_reviews' },         reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_review_replies' },  reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_reports' },         reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scheduled_posts' },     reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lsa_leads' },           reload)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [state.status, state.isAdmin, state.client]);
@@ -3993,110 +4026,299 @@ window.ScreenCustomers = ScreenCustomers;
 /* AI Activity, Automations, Integrations, Team screens */
 
 function ScreenAI() {
+  const scheduledPosts = window.__HELPAI_SCHEDULED_POSTS || [];
+  const reviews        = window.__HELPAI_GMB_REVIEWS || [];
+  const reports        = window.__HELPAI_GMB_REPORTS || [];
+  const leads          = window.__HELPAI_LEADS_ROWS || [];
+  const kpisRows       = window.__HELPAI_KPIS_ROWS || [];
+  const lsaLeads       = window.__HELPAI_LSA_LEADS || [];
+  const clients        = window.__HELPAI_CLIENTS_ROWS || [];
+
+  const now = Date.now();
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+
+  const postsPublished = scheduledPosts.filter(p => p.status === "published" || p.published_at);
+  const postsThisMonth = postsPublished.filter(p => p.published_at && new Date(p.published_at) >= monthStart);
+  const postsScheduled = scheduledPosts.filter(p => (p.status === "draft" || p.status === "pending" || p.status === "scheduled") && p.scheduled_at && new Date(p.scheduled_at).getTime() > now);
+  const reviewsRepliedThisMonth = reviews.filter(r => r.replied_at && new Date(r.replied_at) >= monthStart);
+  const reportsThisMonth = reports.filter(r => r.created_at && new Date(r.created_at) >= monthStart);
+
+  const totalActions = postsPublished.length + reviews.filter(r => r.reply_text).length + reports.length;
+  const actionsThisMonth = postsThisMonth.length + reviewsRepliedThisMonth.length + reportsThisMonth.length;
+
+  const minutesSaved = postsPublished.length * 5 + reviews.filter(r => r.reply_text).length * 3 + reports.length * 30;
+  const daysSaved = (minutesSaved / 60 / 8).toFixed(1);
+  const minutesSavedMonth = postsThisMonth.length * 5 + reviewsRepliedThisMonth.length * 3 + reportsThisMonth.length * 30;
+  const daysSavedMonth = (minutesSavedMonth / 60 / 8).toFixed(1);
+
+  const leadsToFollowUp = leads.filter(l => {
+    const s = (l.statut || "").toLowerCase();
+    if (s === "gagné" || s === "gagne" || s === "perdu") return false;
+    if (!l.created_at) return false;
+    const ageDays = (now - new Date(l.created_at).getTime()) / 86400000;
+    return ageDays >= 3;
+  });
+
+  const curMonth = new Date().toISOString().slice(0,7);
+  const adsKpisCur = kpisRows.filter(k => (k.periode || "").slice(0,7) === curMonth && (k.source === "google_ads" || k.source === "meta"));
+  const sumK = (rows, src, k) => rows.filter(r => r.source === src).reduce((s, r) => s + Number(r[k] || 0), 0);
+  const adsBySource = ["google_ads", "meta"].map(src => ({
+    src,
+    label: src === "google_ads" ? "Google Ads" : "Meta Ads",
+    color: src === "google_ads" ? "oklch(0.80 0.120 60)" : "oklch(0.74 0.155 55)",
+    leads: sumK(adsKpisCur, src, "nb_leads"),
+    depense: sumK(adsKpisCur, src, "depense"),
+    ca: sumK(adsKpisCur, src, "ca_genere"),
+    deals: sumK(adsKpisCur, src, "deals"),
+    cpl: sumK(adsKpisCur, src, "cout_par_lead"),
+    roas: kpisRows.filter(k => (k.periode || "").slice(0,7) === curMonth && k.source === src).reduce((m, k) => Math.max(m, Number(k.roas) || 0), 0),
+  }));
+
+  function relTime(iso) {
+    if (!iso) return "—";
+    const delta = Math.floor((now - new Date(iso).getTime()) / 1000);
+    if (delta < 0) {
+      const future = -delta;
+      if (future < 3600) return "dans " + Math.floor(future / 60) + " min";
+      if (future < 86400) return "dans " + Math.floor(future / 3600) + "h";
+      return "dans " + Math.floor(future / 86400) + "j";
+    }
+    if (delta < 60) return "il y a " + delta + "s";
+    if (delta < 3600) return "il y a " + Math.floor(delta / 60) + " min";
+    if (delta < 86400) return "il y a " + Math.floor(delta / 3600) + "h";
+    return "il y a " + Math.floor(delta / 86400) + "j";
+  }
+  function postStatusTag(s) {
+    const k = (s || "").toLowerCase();
+    if (k === "published") return "success";
+    if (k === "scheduled" || k === "pending") return "accent";
+    if (k === "failed" || k === "error") return "danger";
+    return "";
+  }
+  function clientNameByGmbId(gmbId) {
+    const c = clients.find(x => x.gmb_client_id === gmbId);
+    return c ? c.nom : (gmbId || "—");
+  }
+  function clientNameById(id) {
+    const c = clients.find(x => x.id === id);
+    return c ? c.nom : "—";
+  }
+
+  const feed = [];
+  postsPublished.slice(0, 30).forEach(p => {
+    feed.push({
+      type: "post",
+      label: "Post publié sur GMB",
+      who: clientNameByGmbId(p.client_id),
+      detail: (p.post_text || "").slice(0, 140) + ((p.post_text || "").length > 140 ? "…" : ""),
+      time: p.published_at || p.created_at,
+      icon: "globe",
+      tone: "var(--success)",
+    });
+  });
+  reviews.filter(r => r.reply_text).slice(0, 30).forEach(r => {
+    feed.push({
+      type: "reply",
+      label: "Réponse à un avis (note " + (r.rating || "?") + "/5)",
+      who: clientNameById(r.agency_client_id),
+      detail: (r.reply_text || "").slice(0, 140),
+      time: r.replied_at || r.created_at,
+      icon: "sparkles",
+      tone: "var(--accent)",
+    });
+  });
+  reports.slice(0, 30).forEach(r => {
+    feed.push({
+      type: "report",
+      label: "Rapport de performance généré",
+      who: clientNameById(r.agency_client_id),
+      detail: "Période " + (r.periode_debut || "?") + " → " + (r.periode_fin || "?") + " · " + (r.total_vues || 0) + " vues",
+      time: r.created_at,
+      icon: "save",
+      tone: "var(--info)",
+    });
+  });
+  feed.sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
+  const feedTop = feed.slice(0, 12);
+
   return (
     <div className="stack-lg fade-up">
       <div className="hero-panel">
         <div>
           <div className="row" style={{ gap: 8, marginBottom: 6 }}>
             <span className="tag accent"><Icon name="sparkles" size={10}/> <EditableText value="Agent HelpAi" tag="span"/></span>
-            <span className="pill live"><span className="dot"/> <EditableText value="Actif 24/7" tag="span"/></span>
+            <span className="pill live"><span className="dot"/> <EditableText value="Actif 24/7 · données live" tag="span"/></span>
           </div>
-          <EditableText value="L'IA a traité 8 547 tâches ce mois — équivalent à 14.2 jours de travail humain." tag="div" className="hp-title" multiline/>
-          <EditableText value="Qualification de leads, relances, scoring, réponses first-touch, collecte d'avis — tout tourne en continu." tag="div" className="hp-sub" multiline/>
+          <EditableText value={"L'IA a réalisé " + totalActions + " action" + (totalActions > 1 ? "s" : "") + " — " + daysSaved + " jour" + (Number(daysSaved) > 1 ? "s" : "") + " de travail économisé."} tag="div" className="hp-title" multiline/>
+          <EditableText value="Posts GMB, réponses aux avis, rapports de performance, gestion des relances — tout est synchronisé en temps réel avec le bot Telegram." tag="div" className="hp-sub" multiline/>
         </div>
-        <button className="btn primary"><Icon name="plus" size={14}/> Nouvelle compétence</button>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-        <KpiCard label="Tâches traitées" value="8 547" trend="+1 204" dir="up"/>
-        <KpiCard label="Temps économisé" value="14.2" unit="jours" trend="+3.1j" dir="up"/>
-        <KpiCard label="Taux de succès" value="96.4" unit="%" trend="+0.8pt" dir="up"/>
-        <KpiCard label="Escalades humaines" value="142" trend="-18" dir="up"/>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Actions IA (total)" tag="span"/><span className="trend up">+{actionsThisMonth} ce mois</span></div>
+          <div className="kpi-value"><span className="mono">{totalActions.toLocaleString("fr-FR")}</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Temps économisé" tag="span"/><span className="trend up">+{daysSavedMonth}j ce mois</span></div>
+          <div className="kpi-value"><span className="mono">{daysSaved}</span><span className="unit">jours</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Posts planifiés" tag="span"/></div>
+          <div className="kpi-value"><span className="mono">{postsScheduled.length}</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Leads à relancer" tag="span"/></div>
+          <div className="kpi-value"><span className="mono">{leadsToFollowUp.length}</span></div>
+        </div>
       </div>
 
-      <div className="grid g-2-1">
+      <div className="grid g-2">
         <div className="card">
           <div className="card-head">
-            <EditableText value="Activité de l'agent (24h)" tag="div" className="card-title"/>
-            <div className="chart-legend">
-              <span className="lg" style={{ color: "var(--accent)" }}><span className="sw"/> <EditableText value="Tâches" tag="span"/></span>
-              <span className="lg" style={{ color: "var(--success)" }}><span className="sw"/> <EditableText value="Succès" tag="span"/></span>
+            <div>
+              <EditableText value="Activité GMB récente" tag="div" className="card-title"/>
+              <EditableText value="Posts publiés, réponses aux avis, rapports générés" tag="div" className="card-sub"/>
             </div>
+            <span className="pill live"><span className="dot"/> Temps réel</span>
           </div>
-          <div className="card-body">
-            <LineChart
-              data={Array.from({ length: 24 }, (_, i) => ({
-                m: i + "h",
-                tasks: 80 + Math.sin(i / 3) * 60 + Math.random() * 40 + (i > 8 && i < 20 ? 80 : 0),
-                success: 75 + Math.sin(i / 3) * 55 + Math.random() * 35 + (i > 8 && i < 20 ? 78 : 0),
-              }))}
-              height={260}
-              xLabels={Array.from({ length: 24 }, (_, i) => i + "h")}
-              series={[
-                { key: "tasks", label: "Tâches", color: "var(--accent)", fmt: v => Math.round(v) },
-                { key: "success", label: "Succès", color: "var(--success)", fmt: v => Math.round(v) },
-              ]}
-              yFormat={v => Math.round(v)}
-            />
+          <div className="card-body" style={{ padding: 0, maxHeight: 520, overflow: "auto" }}>
+            {feedTop.length === 0 && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Aucune activité IA pour l'instant.</div>}
+            {feedTop.map((f, i) => (
+              <div key={i} style={{ padding: "12px 18px", borderBottom: i < feedTop.length - 1 ? "1px solid var(--border-soft)" : "0" }}>
+                <div className="row" style={{ gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--surface-2)", color: f.tone, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <Icon name={f.icon} size={14}/>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="row between" style={{ marginBottom: 2 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>{f.label}</span>
+                      <span className="mono small muted">{relTime(f.time)}</span>
+                    </div>
+                    <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>Client : <strong style={{ color: "var(--text-2)" }}>{f.who}</strong></div>
+                    <div className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}>{f.detail}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
         <div className="card">
           <div className="card-head">
-            <EditableText value="Compétences actives" tag="div" className="card-title"/>
+            <div>
+              <EditableText value="Activité à venir" tag="div" className="card-title"/>
+              <EditableText value="Posts planifiés et leads à relancer" tag="div" className="card-sub"/>
+            </div>
           </div>
-          <div className="card-body stack-md">
-            {[
-              { n: "Qualification lead", c: 2841, color: "var(--accent)" },
-              { n: "Relance devis", c: 487, color: "var(--accent-2)" },
-              { n: "Scoring chaud", c: 1892, color: "var(--success)" },
-              { n: "Réponse first-touch", c: 2104, color: "var(--info)" },
-              { n: "Collecte avis", c: 628, color: "oklch(0.65 0.15 310)" },
-              { n: "Reporting hebdo", c: 38, color: "var(--text-3)" },
-            ].map((s, i) => (
-              <div key={i} className="stack-sm">
-                <div className="row between">
-                  <EditableText value={s.n} tag="span" style={{ fontSize: 12.5, fontWeight: 500 }}/>
-                  <span className="mono small">{s.c.toLocaleString("fr")}</span>
+          <div className="card-body" style={{ padding: 0, maxHeight: 520, overflow: "auto" }}>
+            {postsScheduled.length === 0 && leadsToFollowUp.length === 0 && (
+              <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Rien de planifié pour l'instant.</div>
+            )}
+            {postsScheduled.slice(0, 8).map((p) => (
+              <div key={"sp-" + p.id} style={{ padding: "12px 18px", borderBottom: "1px solid var(--border-soft)" }}>
+                <div className="row between" style={{ marginBottom: 4 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <Icon name="calendar" size={13} style={{ color: "var(--accent)" }}/>
+                    <span style={{ fontSize: 12.5, fontWeight: 600 }}>Post GMB planifié</span>
+                    <span className={"tag " + postStatusTag(p.status)}>{p.status}</span>
+                  </div>
+                  <span className="mono small" style={{ color: "var(--accent)" }}>{relTime(p.scheduled_at)}</span>
                 </div>
-                <div className="progress">
-                  <div style={{ width: Math.min(100, (s.c / 3000) * 100) + "%", height: "100%", background: s.color, borderRadius: 99 }}/>
-                </div>
+                <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>Client : <strong style={{ color: "var(--text-2)" }}>{clientNameByGmbId(p.client_id)}</strong></div>
+                <div className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}>{(p.post_text || "").slice(0, 120)}…</div>
               </div>
             ))}
+            {leadsToFollowUp.slice(0, 8).map((l) => {
+              const ageDays = Math.floor((now - new Date(l.created_at).getTime()) / 86400000);
+              return (
+                <div key={"l-" + l.id} style={{ padding: "12px 18px", borderBottom: "1px solid var(--border-soft)" }}>
+                  <div className="row between" style={{ marginBottom: 4 }}>
+                    <div className="row" style={{ gap: 8 }}>
+                      <Icon name="zap" size={13} style={{ color: "var(--accent-2)" }}/>
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>Lead à relancer</span>
+                      <span className="tag">{l.statut || "nouveau"}</span>
+                    </div>
+                    <span className="mono small muted">J+{ageDays}</span>
+                  </div>
+                  <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>Client : <strong style={{ color: "var(--text-2)" }}>{clientNameById(l.client_id)}</strong></div>
+                  <div className="small" style={{ color: "var(--text-2)" }}>{l.nom || "Anonyme"} · {l.source || "—"} · {l.email || l.telephone || "—"}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
 
       <div className="card">
         <div className="card-head">
-          <EditableText value="Conversations récentes de l'agent" tag="div" className="card-title"/>
-          <span className="pill live"><span className="dot"/> <EditableText value="Temps réel" tag="span"/></span>
+          <div>
+            <EditableText value="Performance Ads — mois courant" tag="div" className="card-title"/>
+            <EditableText value="Google Ads & Meta Ads · alimenté par les KPIs synchronisés" tag="div" className="card-sub"/>
+          </div>
+          {lsaLeads.length > 0 && <span className="tag accent">{lsaLeads.length} leads LSA</span>}
         </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {[
-            { lead: "Marie Dubois", msg: "Intéressée par un audit climatisation pour un local de 280m²", score: 92, action: "RDV proposé lundi 14h", time: "il y a 3 min" },
-            { lead: "Pascal Vincent", msg: "Demande un devis pour 4 sites — groupe hôtelier", score: 88, action: "Escaladé à Thomas R.", time: "il y a 14 min" },
-            { lead: "Café Central", msg: "N'a pas répondu à la relance J+3", score: 54, action: "Nouvelle relance programmée J+7", time: "il y a 42 min" },
-            { lead: "Dr. Petit", msg: "Souhaite annuler son contrat — insatisfait", score: 18, action: "Escaladé à Nicolas B.", time: "il y a 1h" },
-          ].map((c, i) => (
-            <div key={i} style={{ padding: "14px 18px", borderBottom: i < 3 ? "1px solid var(--border-soft)" : "0" }}>
-              <div className="row between" style={{ marginBottom: 6 }}>
-                <div className="row" style={{ gap: 10 }}>
-                  <span className={"av av-colors-" + ((i % 4) + 1)}>{c.lead.split(" ").map(x => x[0]).join("").slice(0, 2)}</span>
-                  <EditableText value={c.lead} tag="strong"/>
-                  <span className="tag accent">Score {c.score}</span>
+        <div className="card-body grid g-2">
+          {adsBySource.map(a => (
+            <div key={a.src} style={{ padding: 16, border: "1px solid var(--border-soft)", borderRadius: 12, background: "var(--bg-2)" }}>
+              <div className="row between" style={{ marginBottom: 12 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: a.color, display: "inline-block" }}/>
+                  <strong style={{ fontSize: 13 }}>{a.label}</strong>
                 </div>
-                <span className="mono small muted">{c.time}</span>
+                <span className="tag">{curMonth}</span>
               </div>
-              <EditableText value={c.msg} tag="div" multiline style={{ fontSize: 12.5, color: "var(--text-2)", marginBottom: 6 }}/>
-              <div className="row" style={{ gap: 8 }}>
-                <Icon name="arrow" size={12} className="muted"/>
-                <EditableText value={c.action} tag="span" className="small" style={{ color: "var(--accent)", fontWeight: 500 }}/>
+              <div className="grid g-2" style={{ gap: 10 }}>
+                <div>
+                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Leads</div>
+                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{a.leads.toLocaleString("fr-FR")}</div>
+                </div>
+                <div>
+                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Dépense</div>
+                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{Math.round(a.depense / 100).toLocaleString("fr-FR")} €</div>
+                </div>
+                <div>
+                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>CPL moyen</div>
+                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{Math.round(a.cpl / 100)} €</div>
+                </div>
+                <div>
+                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>ROAS</div>
+                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{a.roas.toFixed(2)}x</div>
+                </div>
+                <div>
+                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Deals</div>
+                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{a.deals}</div>
+                </div>
+                <div>
+                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>CA généré</div>
+                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{Math.round(a.ca / 100).toLocaleString("fr-FR")} €</div>
+                </div>
               </div>
             </div>
           ))}
         </div>
+        {lsaLeads.length > 0 && (
+          <div style={{ borderTop: "1px solid var(--border-soft)", padding: "14px 18px" }}>
+            <div className="row between" style={{ marginBottom: 10 }}>
+              <strong style={{ fontSize: 12.5 }}>Leads Google Local Services Ads (récents)</strong>
+              <span className="small muted">{lsaLeads.length} au total</span>
+            </div>
+            <div className="stack-sm">
+              {lsaLeads.slice(0, 5).map(l => (
+                <div key={l.id} className="row between" style={{ padding: 8, background: "var(--bg-2)", borderRadius: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 12.5 }}>{l.customer_name || "Anonyme"}</div>
+                    <div className="small muted">{l.service_type || "—"} · {l.location || "—"} · {l.lead_type || "—"}</div>
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <span className="tag">{l.status || "—"}</span>
+                    <span className="mono small muted">{relTime(l.lead_created_at)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
