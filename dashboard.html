@@ -4836,69 +4836,157 @@ function ScreenAds() {
 window.ScreenAds = ScreenAds;
 
 function ScreenAutomations() {
+  const STORAGE_KEY = "helpai_workflows";
   const [tab, setTab] = React.useState("all");
+  const [workflows, setWorkflows] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+    catch (e) { return []; }
+  });
+
+  function persist(list) {
+    setWorkflows(list);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+  function addWorkflow() {
+    const id = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "w-" + Date.now());
+    persist([
+      ...workflows,
+      {
+        id,
+        name: "Nouveau workflow",
+        trigger: "lead.created",
+        runs: 0,
+        success: 100,
+        last: "jamais",
+        status: "draft",
+      },
+    ]);
+  }
+  function updateField(id, field, value) {
+    persist(workflows.map(w => w.id === id ? { ...w, [field]: value } : w));
+  }
+  function deleteWorkflow(id) {
+    if (!window.confirm("Supprimer ce workflow ?")) return;
+    persist(workflows.filter(w => w.id !== id));
+  }
+  function toggleStatus(id) {
+    persist(workflows.map(w => {
+      if (w.id !== id) return w;
+      const next = w.status === "on" ? "paused" : "on";
+      return { ...w, status: next, last: next === "on" ? "à l'instant" : w.last };
+    }));
+  }
+
+  const counts = {
+    all: workflows.length,
+    on: workflows.filter(w => w.status === "on").length,
+    paused: workflows.filter(w => w.status === "paused").length,
+    draft: workflows.filter(w => w.status === "draft").length,
+  };
+  const filtered = tab === "all" ? workflows : workflows.filter(w => w.status === tab);
+
+  const totalRuns = workflows.reduce((s, w) => s + (Number(w.runs) || 0), 0);
+  const avgSuccess = workflows.length
+    ? (workflows.reduce((s, w) => s + (Number(w.success) || 0), 0) / workflows.length).toFixed(1)
+    : "0";
+  const hoursSaved = Math.round(totalRuns * 5 / 60);
+
   return (
     <div className="stack-lg fade-up">
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-        <KpiCard label="Workflows actifs" value="24" trend="+3" dir="up"/>
-        <KpiCard label="Exécutions (30j)" value="6 587" trend="+892" dir="up"/>
-        <KpiCard label="Taux de succès" value="94.7" unit="%" trend="+1.2pt" dir="up"/>
-        <KpiCard label="Temps gagné" value="218" unit="h" trend="+42h" dir="up"/>
+        <KpiCard label="Workflows actifs" value={String(counts.on)} trend={counts.on > 0 ? ("+" + counts.on) : "—"} dir="up" storageNs="autom.kpi.0"/>
+        <KpiCard label="Exécutions (30j)" value={totalRuns.toLocaleString("fr-FR")} trend={totalRuns > 0 ? ("+" + totalRuns) : "—"} dir="up" storageNs="autom.kpi.1"/>
+        <KpiCard label="Taux de succès"   value={String(avgSuccess)} unit="%" trend="—" dir="up" storageNs="autom.kpi.2"/>
+        <KpiCard label="Temps gagné"      value={String(hoursSaved)} unit="h" trend={hoursSaved > 0 ? ("+" + hoursSaved + "h") : "—"} dir="up" storageNs="autom.kpi.3"/>
       </div>
 
       <div className="row between">
         <div className="chips">
-          {[["all","Tous",24],["on","Actifs",21],["paused","Pause",3],["draft","Brouillons",5]].map(([k,l,n]) => (
+          {[["all","Tous",counts.all],["on","Actifs",counts.on],["paused","Pause",counts.paused],["draft","Brouillons",counts.draft]].map(([k,l,n]) => (
             <button key={k} className={"chip " + (tab === k ? "active" : "")} onClick={() => setTab(k)}>
               {l} <span className="count">{n}</span>
             </button>
           ))}
         </div>
-        <button className="btn primary"><Icon name="plus" size={14}/> Créer un workflow</button>
+        <button className="btn primary" onClick={addWorkflow}>
+          <Icon name="plus" size={14}/> Créer un workflow
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
         <table className="data">
           <thead>
             <tr>
-              <EditableText value="Workflow" tag="th"/>
-              <EditableText value="Déclencheur" tag="th"/>
-              <EditableText value="Exécutions" tag="th"/>
-              <EditableText value="Succès" tag="th" style={{ width: "18%" }}/>
-              <EditableText value="Dernière" tag="th"/>
-              <EditableText value="État" tag="th"/>
+              <EditableText value="Workflow" storageKey="autom.col.name" tag="th"/>
+              <EditableText value="Déclencheur" storageKey="autom.col.trigger" tag="th"/>
+              <EditableText value="Exécutions" storageKey="autom.col.runs" tag="th"/>
+              <EditableText value="Succès" storageKey="autom.col.success" tag="th" style={{ width: "18%" }}/>
+              <EditableText value="Dernière" storageKey="autom.col.last" tag="th"/>
+              <EditableText value="État" storageKey="autom.col.state" tag="th"/>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {AUTOMATIONS.map((a, i) => (
-              <tr key={i}>
-                <td><EditableText value={a.name} tag="strong"/></td>
-                <td><EditableText value={a.trigger} tag="code" className="code"/></td>
-                <td className="mono">{a.runs.toLocaleString("fr")}</td>
+            {filtered.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", color: "var(--text-3)" }}>
+                Aucun workflow. Clique sur <strong>Créer un workflow</strong> pour en ajouter.
+              </td></tr>
+            )}
+            {filtered.map((a) => (
+              <tr key={a.id}>
+                <td>
+                  <EditableText value={a.name} storageKey={"autom." + a.id + ".name"} tag="strong"
+                                onCommit={v => updateField(a.id, "name", v)}/>
+                </td>
+                <td>
+                  <EditableText value={a.trigger} storageKey={"autom." + a.id + ".trigger"} tag="code" className="code"
+                                onCommit={v => updateField(a.id, "trigger", v)}/>
+                </td>
+                <td className="mono">
+                  <EditableText value={String(a.runs)} storageKey={"autom." + a.id + ".runs"} tag="span"
+                                onCommit={v => updateField(a.id, "runs", parseInt(v, 10) || 0)}/>
+                </td>
                 <td>
                   <div className="row" style={{ gap: 10 }}>
                     <div className="progress" style={{ flex: 1, maxWidth: 120 }}>
-                      <div className={a.success > 90 ? "p-success" : "p-accent"} style={{ width: a.success + "%" }}/>
+                      <div className={a.success > 90 ? "p-success" : "p-accent"} style={{ width: Math.min(100, Math.max(0, Number(a.success) || 0)) + "%" }}/>
                     </div>
-                    <span className="mono small">{a.success}%</span>
+                    <span className="mono small">
+                      <EditableText value={String(a.success)} storageKey={"autom." + a.id + ".success"} tag="span"
+                                    onCommit={v => updateField(a.id, "success", Math.min(100, Math.max(0, parseFloat(v) || 0)))}/>%
+                    </span>
                   </div>
                 </td>
-                <td className="muted small">{a.last}</td>
-                <td>
-                  {a.status === "on"
-                    ? <span className="tag success"><span className="status-dot ok"/> <EditableText value="Actif" tag="span"/></span>
-                    : <span className="tag"><span className="status-dot off"/> <EditableText value="Pause" tag="span"/></span>}
+                <td className="muted small">
+                  <EditableText value={a.last} storageKey={"autom." + a.id + ".last"} tag="span"
+                                onCommit={v => updateField(a.id, "last", v)}/>
                 </td>
                 <td>
-                  <button className="btn icon ghost">
-                    <Icon name={a.status === "on" ? "pause" : "play"} size={13}/>
-                  </button>
+                  {a.status === "on"
+                    ? <span className="tag success"><span className="status-dot ok"/> Actif</span>
+                    : a.status === "paused"
+                      ? <span className="tag"><span className="status-dot off"/> Pause</span>
+                      : <span className="tag"><span className="status-dot off"/> Brouillon</span>}
+                </td>
+                <td>
+                  <div className="row" style={{ gap: 4 }}>
+                    <button className="btn icon ghost" onClick={() => toggleStatus(a.id)} title={a.status === "on" ? "Mettre en pause" : "Activer"}>
+                      <Icon name={a.status === "on" ? "pause" : "play"} size={13}/>
+                    </button>
+                    <button className="btn icon ghost" onClick={() => deleteWorkflow(a.id)} title="Supprimer" style={{ color: "var(--danger)" }}>
+                      ×
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="small muted" style={{ textAlign: "center", padding: "0 16px" }}>
+        Les workflows sont stockés en local (localStorage) — c'est un mode démo, idéal pour préparer une story de social-proof.
+        Dis-moi si tu veux passer à un vrai moteur d'exécution branché à Supabase.
       </div>
     </div>
   );
