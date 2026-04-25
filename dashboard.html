@@ -1320,8 +1320,10 @@ window.helpAiClearAllOverrides = helpAiClearAllOverrides;
 function EditableText({ value, tag = "span", className = "", style = {}, multiline = false, onCommit, editing: forcedEditing, placeholder = "", storageKey }) {
   const ctx = React.useContext(window.__HelpAi_EditContext);
   const editing = forcedEditing !== undefined ? forcedEditing : (ctx && ctx.editing);
-  // Persistence key: explicit override > stringified value
-  const persistKey = storageKey || (value == null ? null : String(value));
+  // Persistence ONLY when an explicit storageKey is given.
+  // (We deliberately do NOT fall back to the value as a key, otherwise two KPIs
+  //  showing the same number would share the same override.)
+  const persistKey = storageKey || null;
   const initialOverride = helpAiGetOverride(persistKey);
   const [val, setVal] = React.useState(initialOverride !== undefined ? initialOverride : value);
   const [active, setActive] = React.useState(false);
@@ -2099,11 +2101,11 @@ function ScreenOverview() {
       <div className="hero-panel">
         <div>
           <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-            <EditableText value="Copilote IA" tag="span" className="tag accent"/>
-            <EditableText value="Résumé quotidien — 24 avr. 2026" tag="span" className="small muted"/>
+            <EditableText value="Copilote IA" storageKey="overview.hero.tag" tag="span" className="tag accent"/>
+            <EditableText value="Résumé quotidien — 24 avr. 2026" storageKey="overview.hero.subtag" tag="span" className="small muted"/>
           </div>
-          <EditableText tag="div" className="hp-title" multiline value="3 signaux forts aujourd'hui. Ton CA a dépassé l'objectif mensuel de +5.2%."/>
-          <EditableText tag="div" className="hp-sub" multiline value="Le canal Meta Ads performe +38% vs la moyenne. 2 devis à relancer avant 18h. Thomas a 4 RDV à confirmer."/>
+          <EditableText tag="div" className="hp-title" multiline storageKey="overview.hero.title" value="3 signaux forts aujourd'hui. Ton CA a dépassé l'objectif mensuel de +5.2%."/>
+          <EditableText tag="div" className="hp-sub" multiline storageKey="overview.hero.sub" value="Le canal Meta Ads performe +38% vs la moyenne. 2 devis à relancer avant 18h. Thomas a 4 RDV à confirmer."/>
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button className="btn"><Icon name="eye" size={14}/> Voir détails</button>
@@ -2127,11 +2129,11 @@ function ScreenOverview() {
         {KPIS.map((k, i) => (
           <div key={i} className="kpi">
             <div className="kpi-label">
-              <EditableText value={k.label} tag="span"/>
+              <EditableText value={k.label} storageKey={"overview.kpi.label." + i} tag="span"/>
               <span className={"trend " + k.dir}>{k.trend}</span>
             </div>
             <div className="kpi-value">
-              <EditableText value={k.value} tag="span" className="mono"/>
+              <EditableText value={k.value} storageKey={"overview.kpi.value." + i} tag="span" className="mono"/>
               {k.unit && <span className="unit">{k.unit}</span>}
             </div>
             <div className="spark"><Sparkline data={k.spark} /></div>
@@ -2201,11 +2203,11 @@ function ScreenOverview() {
         {KPIS_B.map((k, i) => (
           <div key={i} className="kpi">
             <div className="kpi-label">
-              <EditableText value={k.label} tag="span"/>
+              <EditableText value={k.label} storageKey={"overview.kpiB.label." + i} tag="span"/>
               <span className={"trend " + k.dir}>{k.trend}</span>
             </div>
             <div className="kpi-value">
-              <EditableText value={k.value} tag="span" className="mono"/>
+              <EditableText value={k.value} storageKey={"overview.kpiB.value." + i} tag="span" className="mono"/>
               {k.unit && <span className="unit">{k.unit}</span>}
             </div>
           </div>
@@ -2482,15 +2484,19 @@ function ScreenAcquisition() {
   );
 }
 
-function KpiCard({ label, value, unit, trend, dir }) {
+function KpiCard({ label, value, unit, trend, dir, storageNs }) {
+  // storageNs is a unique namespace per call site (e.g. "ai.tasks", "sales.ca12m"). Falls back to the
+  // label so each card on a screen gets its own override slot. Two cards on different screens
+  // sharing the same label will share — pass storageNs explicitly if you want them independent.
+  const ns = storageNs || ("kpicard." + label);
   return (
     <div className="kpi">
       <div className="kpi-label">
-        <EditableText value={label} tag="span"/>
+        <EditableText value={label} storageKey={ns + ".label"} tag="span"/>
         <span className={"trend " + dir}>{trend}</span>
       </div>
       <div className="kpi-value">
-        <EditableText value={value} tag="span" className="mono"/>
+        <EditableText value={value} storageKey={ns + ".value"} tag="span" className="mono"/>
         {unit && <span className="unit">{unit}</span>}
       </div>
     </div>
@@ -5497,7 +5503,6 @@ function buildNav(isAdmin) {
     { group: "Écosystème", items: [
       { id: "customers",    label: "CRM",          icon: "customers" },
       { id: "gmb",          label: "Google Business", icon: "globe" },
-      { id: "integrations", label: "Intégrations", icon: "integrations" },
     ]},
   ];
   if (isAdmin) {
@@ -5518,7 +5523,6 @@ const SCREEN_META = {
   customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
   gmb:          { title: "Google Business", sub: "Activité live · posts, avis, rapports — alimenté par le bot Telegram", breadcrumb: "Écosystème" },
   architecture: { title: "Architecture",   sub: "Infrastructure HelpAi — 5 piliers",        breadcrumb: "Infrastructure" },
-  integrations: { title: "Intégrations",   sub: "Services connectés à votre espace",       breadcrumb: "Écosystème" },
   clients:      { title: "Gestion des clients", sub: "Portfolio agence — édition complète & connecteurs API", breadcrumb: "Admin" },
   account:      { title: "Mon compte", sub: "Profil, sécurité, documents & factures", breadcrumb: "Compte" },
 };
@@ -5702,7 +5706,6 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
       case "customers":   return <ScreenCustomers/>;
       case "gmb":         return <ScreenGMB/>;
       case "architecture":return <ScreenArchitecture/>;
-      case "integrations":return <ScreenIntegrations/>;
       case "clients":     return isAdmin ? <ScreenClientsAdmin onViewClient={viewAsClient} onRefresh={refresh} tick={tick}/> : <ScreenOverview/>;
       case "account":     return <ScreenAccount user={user} userClient={userClient} isAdmin={isAdmin} onRefresh={refresh}/>;
       default:            return <ScreenOverview/>;
