@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <style>
 /* =========================================================
    HelpAi — Design System
@@ -3313,6 +3315,142 @@ function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
     return "";
   }
 
+  async function generateGmbReportPdf(doc) {
+    setMsg(null);
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+      setMsg({ type: "error", msg: "Librairie PDF non chargée. Recharge la page." });
+      return;
+    }
+    let report = null;
+    if (doc.source_report_id) {
+      const { data, error } = await sb.from("reports").select("*").eq("id", doc.source_report_id).maybeSingle();
+      if (error || !data) {
+        setMsg({ type: "error", msg: "Impossible de charger le rapport source : " + (error ? error.message : "introuvable") });
+        return;
+      }
+      report = data;
+    } else {
+      setMsg({ type: "error", msg: "Ce document n'est pas lié à un rapport GMB exploitable." });
+      return;
+    }
+
+    const d = report.data || {};
+    const stats = d.stats || {};
+    const period = d.period || {};
+    const client = d.client || {};
+    const dt = new Date(report.created_at || Date.now());
+    const dateStr = dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+    const accent = [255, 138, 76]; // brand orange
+    const ink = [25, 25, 25];
+    const muted = [120, 120, 120];
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "pt", format: "a4" });
+    const PW = pdf.internal.pageSize.getWidth();
+    let y = 48;
+
+    // Header bar
+    pdf.setFillColor(accent[0], accent[1], accent[2]);
+    pdf.rect(0, 0, PW, 72, "F");
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(20);
+    pdf.text("Rapport de performance GMB", 40, 38);
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(11);
+    pdf.text("HelpAi Agency · Business Copilot", 40, 56);
+    pdf.setFontSize(10);
+    pdf.text(dateStr, PW - 40, 38, { align: "right" });
+
+    y = 110;
+    pdf.setTextColor(ink[0], ink[1], ink[2]);
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(15);
+    pdf.text(client.companyName || "Client", 40, y);
+    y += 18;
+    pdf.setFont("helvetica", "normal"); pdf.setFontSize(10.5);
+    pdf.setTextColor(muted[0], muted[1], muted[2]);
+    const periodLine = "Période : " + (period.startStr || "—") + " → " + (period.endStr || "—") +
+                       (client.city ? " · " + client.city : "");
+    pdf.text(periodLine, 40, y);
+    y += 28;
+
+    // Indicateurs clés grid
+    pdf.setTextColor(ink[0], ink[1], ink[2]);
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(11);
+    pdf.text("INDICATEURS CLÉS", 40, y);
+    y += 8;
+    pdf.setDrawColor(220, 220, 220);
+    pdf.line(40, y, PW - 40, y);
+    y += 16;
+
+    const kpis = [
+      { label: "Vues",          value: stats.totalViews },
+      { label: "Appels",        value: stats.totalCalls },
+      { label: "Clics site",    value: stats.totalClicks },
+      { label: "Itinéraires",   value: stats.totalDirections },
+      { label: "Posts publiés", value: stats.postsTotal != null ? stats.postsTotal : stats.postsPeriod },
+      { label: "Avis reçus",    value: stats.newReviews },
+      { label: "Avis répondus", value: stats.totalReplied != null ? stats.totalReplied : stats.repliedPeriod },
+      { label: "Avis sans réponse", value: stats.unanswered },
+    ];
+    const cellW = (PW - 80) / 4;
+    const cellH = 56;
+    kpis.forEach((k, i) => {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      const x = 40 + col * cellW;
+      const cy = y + row * (cellH + 8);
+      pdf.setDrawColor(230, 230, 230);
+      pdf.roundedRect(x, cy, cellW - 8, cellH, 6, 6);
+      pdf.setTextColor(muted[0], muted[1], muted[2]);
+      pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5);
+      pdf.text(String(k.label).toUpperCase(), x + 12, cy + 16);
+      pdf.setTextColor(ink[0], ink[1], ink[2]);
+      pdf.setFont("helvetica", "bold"); pdf.setFontSize(20);
+      pdf.text(String(k.value != null ? Number(k.value).toLocaleString("fr-FR") : "—"), x + 12, cy + 42);
+    });
+    y += Math.ceil(kpis.length / 4) * (cellH + 8) + 14;
+
+    // Table mensuel évolution
+    pdf.setTextColor(ink[0], ink[1], ink[2]);
+    pdf.setFont("helvetica", "bold"); pdf.setFontSize(11);
+    pdf.text("ÉVOLUTION MENSUELLE", 40, y);
+    y += 8;
+    pdf.line(40, y, PW - 40, y);
+    y += 12;
+
+    const months = ["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Août","Sep","Oct","Nov","Déc"];
+    if (window.jspdf && pdf.autoTable) {
+      const rows = months.map((m, i) => [
+        m,
+        (stats.views && stats.views[i] != null) ? stats.views[i] : "—",
+        (stats.calls && stats.calls[i] != null) ? stats.calls[i] : "—",
+        (stats.clicks && stats.clicks[i] != null) ? stats.clicks[i] : "—",
+        (stats.dirs && stats.dirs[i] != null) ? stats.dirs[i] : "—",
+        (stats.viewsPrev && stats.viewsPrev[i] != null) ? stats.viewsPrev[i] : "—",
+      ]);
+      pdf.autoTable({
+        startY: y,
+        head: [["Mois", "Vues", "Appels", "Clics", "Itinéraires", "Vues N-1"]],
+        body: rows,
+        theme: "grid",
+        headStyles: { fillColor: [240, 240, 240], textColor: [40, 40, 40], fontStyle: "bold", fontSize: 9 },
+        styles: { fontSize: 9, cellPadding: 5 },
+        margin: { left: 40, right: 40 },
+      });
+      y = pdf.lastAutoTable.finalY + 22;
+    }
+
+    // Footer
+    if (y > pdf.internal.pageSize.getHeight() - 60) { pdf.addPage(); y = 60; }
+    pdf.setDrawColor(230, 230, 230);
+    pdf.line(40, y, PW - 40, y);
+    pdf.setFont("helvetica", "italic"); pdf.setFontSize(9);
+    pdf.setTextColor(muted[0], muted[1], muted[2]);
+    pdf.text("Rapport généré le " + new Date().toLocaleDateString("fr-FR") + " · HelpAi Agency", 40, y + 16);
+
+    const filename = (doc.nom || "Rapport").replace(/[^A-Za-z0-9 _-]/g, "").trim().replace(/\s+/g, "_") + ".pdf";
+    pdf.save(filename);
+  }
+
   return (
     <div className="stack-lg fade-up">
       {msg && (
@@ -3440,21 +3578,30 @@ function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
                     {g.name} <span style={{ color: "var(--text-3)" }}>· {g.items.length}</span>
                   </div>
                   <div className="stack-sm">
-                    {g.items.map(d => (
-                      <div key={d.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{d.nom}</div>
-                          <div className="small muted">
-                            {d.type}{d.taille_kb ? " · " + d.taille_kb + " KB" : ""} · {new Date(d.created_at).toLocaleDateString("fr-FR")}
+                    {g.items.map(d => {
+                      const isGmbReport = d.type === "rapport" && (d.source_report_id || (d.nom || "").toLowerCase().startsWith("rapport de performance gmb"));
+                      return (
+                        <div key={d.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{d.nom}</div>
+                            <div className="small muted">
+                              {d.type}{d.taille_kb ? " · " + d.taille_kb + " KB" : ""} · {new Date(d.created_at).toLocaleDateString("fr-FR")}
+                            </div>
                           </div>
+                          {d.drive_url ? (
+                            <a className="btn small" href={d.drive_url} target="_blank" rel="noopener noreferrer">
+                              <Icon name="external" size={12}/> Ouvrir
+                            </a>
+                          ) : isGmbReport ? (
+                            <button className="btn small primary" onClick={() => generateGmbReportPdf(d)}>
+                              <Icon name="download" size={12}/> Télécharger PDF
+                            </button>
+                          ) : (
+                            <span className="small muted">Lien indisponible</span>
+                          )}
                         </div>
-                        {d.drive_url ? (
-                          <a className="btn small" href={d.drive_url} target="_blank" rel="noopener noreferrer">
-                            <Icon name="external" size={12}/> Ouvrir
-                          </a>
-                        ) : <span className="small muted">Lien indisponible</span>}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
