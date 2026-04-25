@@ -1397,39 +1397,82 @@ function initials(s) {
   return s.split(/\s+/).filter(Boolean).map(x => x[0]).slice(0,2).join("").toUpperCase();
 }
 
-/* ----- loadAllData({isAdmin, clientId}) ----- */
-async function loadAllData({ isAdmin, clientId }) {
-  const monthsArr = buildMonths(12);
+/* ----- helpers for date range ----- */
+function buildMonthsBetween(startIso, endIso) {
+  const arr = [];
+  const start = new Date(startIso); start.setDate(1); start.setHours(0,0,0,0);
+  const end = new Date(endIso);
+  let cap = 0;
+  let d = new Date(start);
+  while (d <= end && cap < 60) {
+    arr.push({ d: new Date(d), key: d.toISOString().slice(0,7), label: fmtMonthLabel(d) });
+    d.setMonth(d.getMonth() + 1);
+    cap++;
+  }
+  if (arr.length === 0) arr.push({ d: new Date(), key: new Date().toISOString().slice(0,7), label: fmtMonthLabel(new Date()) });
+  return arr;
+}
+function defaultRange() {
+  const end = new Date();
+  const start = new Date();
+  start.setMonth(start.getMonth() - 11); start.setDate(1); start.setHours(0,0,0,0);
+  return { start: start.toISOString().slice(0,10), end: end.toISOString().slice(0,10), preset: '12m' };
+}
+function readStoredRange() {
+  try {
+    const raw = localStorage.getItem('helpai_date_range');
+    if (!raw) return null;
+    const r = JSON.parse(raw);
+    if (r && r.start && r.end) return r;
+  } catch (e) {}
+  return null;
+}
+window.__HELPAI_RANGE = window.__HELPAI_RANGE || readStoredRange() || defaultRange();
+
+/* ----- loadAllData({isAdmin, clientId, dateRange}) ----- */
+async function loadAllData({ isAdmin, clientId, dateRange }) {
+  const range = dateRange || window.__HELPAI_RANGE || defaultRange();
+  window.__HELPAI_RANGE = range;
+  const startIso = range.start; // YYYY-MM-DD
+  const endIso = range.end;
+  const startTs = startIso + 'T00:00:00';
+  const endTs   = endIso   + 'T23:59:59';
+
+  const monthsArr = buildMonthsBetween(startIso, endIso);
   const MONTHS = monthsArr.map(m => m.label);
 
   const clientFilter = isAdmin ? null : clientId;
 
-  /* agency_clients */
+  /* agency_clients (reference list — not date-filtered) */
   let qc = sb.from('agency_clients').select('*');
   if (clientFilter) qc = qc.eq('id', clientFilter);
   const { data: clientsRows = [] } = await qc;
 
   /* agency_leads */
-  let ql = sb.from('agency_leads').select('*').order('created_at', { ascending: false }).limit(500);
+  let ql = sb.from('agency_leads').select('*')
+    .gte('created_at', startTs).lte('created_at', endTs)
+    .order('created_at', { ascending: false }).limit(500);
   if (clientFilter) ql = ql.eq('client_id', clientFilter);
   const { data: leadsRows = [] } = await ql;
 
-  /* agency_kpis */
-  let qk = sb.from('agency_kpis').select('*');
+  /* agency_kpis (filter on periode date) */
+  let qk = sb.from('agency_kpis').select('*')
+    .gte('periode', startIso).lte('periode', endIso);
   if (clientFilter) qk = qk.eq('client_id', clientFilter);
   const { data: kpisRows = [] } = await qk;
 
-  /* agency_invoices (admin only for overview) */
+  /* agency_invoices */
   let invRows = [];
-  if (isAdmin) {
-    const { data } = await sb.from('agency_invoices').select('*').order('created_at', { ascending: false }).limit(200);
-    invRows = data || [];
-  } else if (clientFilter) {
-    const { data } = await sb.from('agency_invoices').select('*').eq('client_id', clientFilter).order('created_at', { ascending: false });
+  {
+    let qi = sb.from('agency_invoices').select('*')
+      .gte('created_at', startTs).lte('created_at', endTs)
+      .order('created_at', { ascending: false }).limit(500);
+    if (clientFilter) qi = qi.eq('client_id', clientFilter);
+    const { data } = await qi;
     invRows = data || [];
   }
 
-  /* agency_gmb_stats (all or scoped) */
+  /* agency_gmb_stats (cumulative state — not date-filtered) */
   let gmbRows = [];
   try {
     let qg = sb.from('agency_gmb_stats').select('*');
@@ -1438,7 +1481,7 @@ async function loadAllData({ isAdmin, clientId }) {
     gmbRows = data || [];
   } catch (e) { gmbRows = []; }
 
-  /* agency_gmb_activity (counters per client) */
+  /* agency_gmb_activity (cumulative counters — not date-filtered) */
   let gmbActivityRows = [];
   try {
     let qa = sb.from('agency_gmb_activity').select('*');
@@ -1447,44 +1490,52 @@ async function loadAllData({ isAdmin, clientId }) {
     gmbActivityRows = data || [];
   } catch (e) { gmbActivityRows = []; }
 
-  /* agency_gmb_posts (feed) */
+  /* agency_gmb_posts (feed, date-filtered) */
   let gmbPostsRows = [];
   try {
-    let qp = sb.from('agency_gmb_posts').select('*').order('created_at', { ascending: false }).limit(50);
+    let qp = sb.from('agency_gmb_posts').select('*')
+      .gte('created_at', startTs).lte('created_at', endTs)
+      .order('created_at', { ascending: false }).limit(100);
     if (clientFilter) qp = qp.eq('agency_client_id', clientFilter);
     const { data } = await qp;
     gmbPostsRows = data || [];
   } catch (e) { gmbPostsRows = []; }
 
-  /* agency_gmb_reviews (feed) */
+  /* agency_gmb_reviews (feed, date-filtered) */
   let gmbReviewsRows = [];
   try {
-    let qr = sb.from('agency_gmb_reviews').select('*').order('created_at', { ascending: false }).limit(50);
+    let qr = sb.from('agency_gmb_reviews').select('*')
+      .gte('created_at', startTs).lte('created_at', endTs)
+      .order('created_at', { ascending: false }).limit(100);
     if (clientFilter) qr = qr.eq('agency_client_id', clientFilter);
     const { data } = await qr;
     gmbReviewsRows = data || [];
   } catch (e) { gmbReviewsRows = []; }
 
-  /* agency_gmb_reports */
+  /* agency_gmb_reports (date-filtered) */
   let gmbReportsRows = [];
   try {
-    let qrp = sb.from('agency_gmb_reports').select('*').order('created_at', { ascending: false }).limit(50);
+    let qrp = sb.from('agency_gmb_reports').select('*')
+      .gte('created_at', startTs).lte('created_at', endTs)
+      .order('created_at', { ascending: false }).limit(100);
     if (clientFilter) qrp = qrp.eq('agency_client_id', clientFilter);
     const { data } = await qrp;
     gmbReportsRows = data || [];
   } catch (e) { gmbReportsRows = []; }
 
-  /* scheduled_posts (Telegram bot post queue — client_id is text slug = gmb_clients.id) */
+  /* scheduled_posts (filter on created_at OR scheduled_at within range) */
   let scheduledPostsRows = [];
   try {
-    // Resolve client_id -> gmb_client_id mapping when scoping for a single client
     let scopedGmbClientIds = null;
     if (clientFilter) {
       const me = clientsRows.find(c => c.id === clientFilter);
       if (me && me.gmb_client_id) scopedGmbClientIds = [me.gmb_client_id];
-      else scopedGmbClientIds = []; // client without gmb mapping → no rows
+      else scopedGmbClientIds = [];
     }
-    let qsp = sb.from('scheduled_posts').select('*').order('scheduled_at', { ascending: false }).limit(100);
+    // Use OR on (created_at within range) OR (scheduled_at within range) to capture both past creates and future schedules
+    let qsp = sb.from('scheduled_posts').select('*')
+      .or(`and(created_at.gte.${startTs},created_at.lte.${endTs}),and(scheduled_at.gte.${startTs},scheduled_at.lte.${endTs})`)
+      .order('scheduled_at', { ascending: false }).limit(200);
     if (scopedGmbClientIds !== null) {
       if (scopedGmbClientIds.length === 0) qsp = qsp.eq('client_id', '__none__');
       else qsp = qsp.in('client_id', scopedGmbClientIds);
@@ -1493,11 +1544,13 @@ async function loadAllData({ isAdmin, clientId }) {
     scheduledPostsRows = data || [];
   } catch (e) { scheduledPostsRows = []; }
 
-  /* lsa_leads (Google Local Services Ads — admin only for now, no client mapping) */
+  /* lsa_leads (Google Local Services Ads — admin only) */
   let lsaLeadsRows = [];
   if (isAdmin) {
     try {
-      const { data } = await sb.from('lsa_leads').select('*').order('lead_created_at', { ascending: false }).limit(50);
+      const { data } = await sb.from('lsa_leads').select('*')
+        .gte('lead_created_at', startTs).lte('lead_created_at', endTs)
+        .order('lead_created_at', { ascending: false }).limit(100);
       lsaLeadsRows = data || [];
     } catch (e) { lsaLeadsRows = []; }
   }
@@ -5391,6 +5444,97 @@ const SCREEN_META = {
 const EditContext = window.__HelpAi_EditContext || React.createContext({ editing: false });
 window.__HelpAi_EditContext = EditContext;
 
+function fmtRangeLabel(r) {
+  if (!r || !r.start || !r.end) return "Toute la période";
+  const fmt = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  };
+  return fmt(r.start) + " — " + fmt(r.end);
+}
+
+function rangeFromPreset(preset) {
+  const today = new Date();
+  const end = today.toISOString().slice(0,10);
+  let start = new Date(today);
+  if (preset === "7j")    start.setDate(today.getDate() - 6);
+  else if (preset === "30j") start.setDate(today.getDate() - 29);
+  else if (preset === "3m")  start.setMonth(today.getMonth() - 3);
+  else if (preset === "6m")  start.setMonth(today.getMonth() - 6);
+  else if (preset === "12m") { start.setMonth(today.getMonth() - 11); start.setDate(1); }
+  else if (preset === "ytd") { start = new Date(today.getFullYear(), 0, 1); }
+  else if (preset === "all") { start = new Date(2020, 0, 1); }
+  return { start: start.toISOString().slice(0,10), end, preset };
+}
+
+function DateRangePopover({ current, onApply, onClose }) {
+  const [start, setStart] = React.useState(current.start || "");
+  const [end, setEnd] = React.useState(current.end || "");
+  const popRef = React.useRef(null);
+
+  React.useEffect(() => {
+    function onDocClick(e) {
+      if (popRef.current && !popRef.current.contains(e.target)) onClose();
+    }
+    function onKey(e) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const presets = [
+    { id: "7j",  label: "7 jours" },
+    { id: "30j", label: "30 jours" },
+    { id: "3m",  label: "3 mois" },
+    { id: "6m",  label: "6 mois" },
+    { id: "12m", label: "12 mois" },
+    { id: "ytd", label: "Année en cours" },
+    { id: "all", label: "Tout" },
+  ];
+
+  return (
+    <div ref={popRef} style={{
+      position: "absolute", top: "calc(100% + 6px)", right: 0,
+      width: 320, padding: 14,
+      background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12,
+      boxShadow: "0 12px 40px rgba(0,0,0,0.45)", zIndex: 80,
+    }}>
+      <div className="small muted" style={{ marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 10.5 }}>Plages rapides</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 14 }}>
+        {presets.map(p => (
+          <button key={p.id}
+                  className={"chip " + (current.preset === p.id ? "active" : "")}
+                  onClick={() => onApply(rangeFromPreset(p.id))}
+                  style={{ justifyContent: "center" }}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="small muted" style={{ marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 10.5 }}>Personnalisée</div>
+      <div className="stack-sm">
+        <label className="stack-xs">
+          <span className="small muted">Début</span>
+          <input type="date" className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }}
+                 value={start} onChange={e => setStart(e.target.value)}/>
+        </label>
+        <label className="stack-xs">
+          <span className="small muted">Fin</span>
+          <input type="date" className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }}
+                 value={end} onChange={e => setEnd(e.target.value)}/>
+        </label>
+        <button className="btn primary" style={{ justifyContent: "center", marginTop: 4 }}
+                disabled={!start || !end || start > end}
+                onClick={() => onApply({ start, end, preset: "custom" })}>
+          Appliquer
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App({ user, isAdmin, displayName, userClient, onLogout }) {
   const [theme, setTheme] = React.useState(() => localStorage.getItem('theme') || 'dark');
   const [editorOpen, setEditorOpen] = React.useState(false);
@@ -5398,7 +5542,16 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
   const [viewingClientId, setViewingClientId] = React.useState(null);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [tick, setTick] = React.useState(0);
+  const [dateRange, setDateRangeState] = React.useState(() => window.__HELPAI_RANGE || { start: '', end: '', preset: '12m' });
+  const [rangePickerOpen, setRangePickerOpen] = React.useState(false);
   const initialized = React.useRef(false);
+
+  const setDateRange = React.useCallback((r) => {
+    window.__HELPAI_RANGE = r;
+    try { localStorage.setItem('helpai_date_range', JSON.stringify(r)); } catch (e) {}
+    setDateRangeState(r);
+    setRefreshKey(k => k + 1);
+  }, []);
 
   React.useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -5588,7 +5741,14 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
               <h1 className="page-title">{meta.title}</h1>
               <div className="page-sub">{meta.sub}</div>
             </div>
-            <div className="page-actions">
+            <div className="page-actions" style={{ position: "relative" }}>
+              <button className="btn" onClick={() => setRangePickerOpen(o => !o)} title="Plage de dates">
+                <Icon name="calendar" size={13}/> {fmtRangeLabel(dateRange)}
+                <Icon name="chevDown" size={11} style={{ marginLeft: 4 }}/>
+              </button>
+              {rangePickerOpen && (
+                <DateRangePopover current={dateRange} onApply={(r) => { setDateRange(r); setRangePickerOpen(false); }} onClose={() => setRangePickerOpen(false)}/>
+              )}
               <button className="btn" onClick={refresh}>
                 <Icon name="refresh" size={13}/> Actualiser
               </button>
