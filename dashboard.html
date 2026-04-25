@@ -1285,19 +1285,57 @@ Object.assign(window, { LineChart, BarChart, Sparkline, DonutChart, CHART_COLORS
 // Ensure EditContext exists before app.jsx loads. Namespaced to avoid clash with native browser EditContext API.
 window.__HelpAi_EditContext = window.__HelpAi_EditContext || React.createContext({ editing: false });
 
-function EditableText({ value, tag = "span", className = "", style = {}, multiline = false, onCommit, editing: forcedEditing, placeholder = "" }) {
+/* Persistent visual overrides — used for "social proof" mode where the admin
+   tweaks displayed numbers/labels and wants those tweaks to survive refreshes.
+   Stored in localStorage keyed by the original `value` (or an explicit storageKey). */
+const HELPAI_OV_PREFIX = 'helpai_override.';
+function helpAiGetOverride(key) {
+  if (!key) return undefined;
+  try {
+    const raw = localStorage.getItem(HELPAI_OV_PREFIX + key);
+    return raw === null ? undefined : raw;
+  } catch (e) { return undefined; }
+}
+function helpAiSetOverride(key, val) {
+  if (!key) return;
+  try {
+    if (val === undefined || val === null || val === '') localStorage.removeItem(HELPAI_OV_PREFIX + key);
+    else localStorage.setItem(HELPAI_OV_PREFIX + key, val);
+  } catch (e) {}
+}
+function helpAiClearAllOverrides() {
+  try {
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(HELPAI_OV_PREFIX) === 0) toRemove.push(k);
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
+}
+window.helpAiGetOverride = helpAiGetOverride;
+window.helpAiSetOverride = helpAiSetOverride;
+window.helpAiClearAllOverrides = helpAiClearAllOverrides;
+
+function EditableText({ value, tag = "span", className = "", style = {}, multiline = false, onCommit, editing: forcedEditing, placeholder = "", storageKey }) {
   const ctx = React.useContext(window.__HelpAi_EditContext);
   const editing = forcedEditing !== undefined ? forcedEditing : (ctx && ctx.editing);
-  const [val, setVal] = React.useState(value);
+  // Persistence key: explicit override > stringified value
+  const persistKey = storageKey || (value == null ? null : String(value));
+  const initialOverride = helpAiGetOverride(persistKey);
+  const [val, setVal] = React.useState(initialOverride !== undefined ? initialOverride : value);
   const [active, setActive] = React.useState(false);
   const ref = React.useRef(null);
 
-  React.useEffect(() => { setVal(value); }, [value]);
+  // When the underlying value prop changes (data refresh), prefer override if present, else new value
+  React.useEffect(() => {
+    const ov = helpAiGetOverride(persistKey);
+    setVal(ov !== undefined ? ov : value);
+  }, [value, persistKey]);
 
   React.useEffect(() => {
     if (active && ref.current) {
       ref.current.focus();
-      // place cursor at end
       const el = ref.current;
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -1318,6 +1356,11 @@ function EditableText({ value, tag = "span", className = "", style = {}, multili
     setActive(false);
     const next = ref.current ? ref.current.innerText.trim() : val;
     setVal(next);
+    if (persistKey) {
+      // If user emptied the field or restored the original value, clear the override.
+      if (next === '' || next === String(value)) helpAiSetOverride(persistKey, undefined);
+      else helpAiSetOverride(persistKey, next);
+    }
     onCommit && onCommit(next);
   };
 
@@ -5568,6 +5611,22 @@ function DateRangePopover({ current, onApply, onClose }) {
                 disabled={!start || !end || start > end}
                 onClick={() => onApply({ start, end, preset: "custom" })}>
           Appliquer
+        </button>
+      </div>
+
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border-soft)" }}>
+        <button
+          className="btn ghost small"
+          style={{ width: "100%", justifyContent: "center", color: "var(--text-3)" }}
+          title="Effacer toutes les modifications visuelles (chiffres et textes édités à la main)"
+          onClick={() => {
+            if (window.confirm("Effacer toutes les modifications visuelles (chiffres et textes édités à la main) ?")) {
+              if (window.helpAiClearAllOverrides) window.helpAiClearAllOverrides();
+              window.location.reload();
+            }
+          }}
+        >
+          Réinitialiser les modifications visuelles
         </button>
       </div>
     </div>
