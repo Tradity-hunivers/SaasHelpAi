@@ -1438,6 +1438,42 @@ async function loadAllData({ isAdmin, clientId }) {
     gmbRows = data || [];
   } catch (e) { gmbRows = []; }
 
+  /* agency_gmb_activity (counters per client) */
+  let gmbActivityRows = [];
+  try {
+    let qa = sb.from('agency_gmb_activity').select('*');
+    if (clientFilter) qa = qa.eq('agency_client_id', clientFilter);
+    const { data } = await qa;
+    gmbActivityRows = data || [];
+  } catch (e) { gmbActivityRows = []; }
+
+  /* agency_gmb_posts (feed) */
+  let gmbPostsRows = [];
+  try {
+    let qp = sb.from('agency_gmb_posts').select('*').order('created_at', { ascending: false }).limit(50);
+    if (clientFilter) qp = qp.eq('agency_client_id', clientFilter);
+    const { data } = await qp;
+    gmbPostsRows = data || [];
+  } catch (e) { gmbPostsRows = []; }
+
+  /* agency_gmb_reviews (feed) */
+  let gmbReviewsRows = [];
+  try {
+    let qr = sb.from('agency_gmb_reviews').select('*').order('created_at', { ascending: false }).limit(50);
+    if (clientFilter) qr = qr.eq('agency_client_id', clientFilter);
+    const { data } = await qr;
+    gmbReviewsRows = data || [];
+  } catch (e) { gmbReviewsRows = []; }
+
+  /* agency_gmb_reports */
+  let gmbReportsRows = [];
+  try {
+    let qrp = sb.from('agency_gmb_reports').select('*').order('created_at', { ascending: false }).limit(50);
+    if (clientFilter) qrp = qrp.eq('agency_client_id', clientFilter);
+    const { data } = await qrp;
+    gmbReportsRows = data || [];
+  } catch (e) { gmbReportsRows = []; }
+
   /* KPIs cumulés : filtrer source='total' */
   const totals = kpisRows.filter(k => k.source === 'total');
   const totalByMonth = {};
@@ -1699,6 +1735,11 @@ async function loadAllData({ isAdmin, clientId }) {
     __HELPAI_CLIENTS_ROWS: clientsRows,
     __HELPAI_LEADS_ROWS: leadsRows,
     __HELPAI_INV_ROWS: invRows,
+    __HELPAI_GMB_STATS: gmbRows,
+    __HELPAI_GMB_ACTIVITY: gmbActivityRows,
+    __HELPAI_GMB_POSTS: gmbPostsRows,
+    __HELPAI_GMB_REVIEWS: gmbReviewsRows,
+    __HELPAI_GMB_REPORTS: gmbReportsRows,
   });
 }
 window.loadAllData = loadAllData;
@@ -1750,14 +1791,20 @@ function AuthGate() {
     return () => { sub && sub.subscription && sub.subscription.unsubscribe(); };
   }, [resolveRole]);
 
-  // Realtime: re-fetch on new leads
+  // Realtime: re-fetch on new leads or GMB activity (posts, reviews, reports)
   React.useEffect(() => {
     if (state.status !== 'ready') return;
+    const reload = async () => {
+      try { await loadAllData({ isAdmin: state.isAdmin, clientId: state.client ? state.client.id : null }); } catch {}
+    };
     const ch = sb
-      .channel('agency_leads_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'agency_leads' }, async () => {
-        try { await loadAllData({ isAdmin: state.isAdmin, clientId: state.client ? state.client.id : null }); } catch {}
-      })
+      .channel('helpai_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agency_leads' },        reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_published_posts' }, reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_post_drafts' },     reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_reviews' },         reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_review_replies' },  reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_reports' },         reload)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [state.status, state.isAdmin, state.client]);
@@ -3010,6 +3057,306 @@ function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
 }
 
 window.ScreenAccount = ScreenAccount;
+
+/* ============ Google Business (live activity from Telegram bot) ============ */
+function ScreenGMB() {
+  const [tab, setTab] = React.useState("activity");
+  const stats    = window.__HELPAI_GMB_STATS    || [];
+  const activity = window.__HELPAI_GMB_ACTIVITY || [];
+  const posts    = window.__HELPAI_GMB_POSTS    || [];
+  const reviews  = window.__HELPAI_GMB_REVIEWS  || [];
+  const reports  = window.__HELPAI_GMB_REPORTS  || [];
+
+  // Aggregate across (possibly multiple) clients
+  const sumNum = (rows, k) => rows.reduce((s, r) => s + Number(r[k] || 0), 0);
+  const totalPosts        = sumNum(activity, "total_posts");
+  const postsPublies      = sumNum(activity, "posts_publies");
+  const postsAttente      = sumNum(activity, "posts_en_attente");
+  const posts30j          = sumNum(activity, "posts_30j");
+  const totalReponsesAvis = sumNum(activity, "total_reponses_avis");
+  const reponses30j       = sumNum(activity, "reponses_30j");
+  const totalRapports     = sumNum(activity, "total_rapports");
+  const totalAvis         = sumNum(stats, "nb_avis");
+  const avis30j           = sumNum(stats, "nb_avis_30j");
+  const noteMoy = stats.length
+    ? (stats.reduce((s, r) => s + (Number(r.note_moyenne) || 0), 0) / stats.length).toFixed(1)
+    : "—";
+
+  const dernierPost   = activity.map(a => a.dernier_post_le).filter(Boolean).sort().slice(-1)[0];
+  const dernierAvis   = stats.map(s => s.dernier_avis_le).filter(Boolean).sort().slice(-1)[0];
+  const dernierRapport = activity.map(a => a.dernier_rapport_le).filter(Boolean).sort().slice(-1)[0];
+
+  function fmtDateTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString("fr-FR") + " " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  }
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("fr-FR");
+  }
+  function relTime(iso) {
+    if (!iso) return "—";
+    const delta = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (delta < 60) return "il y a " + delta + "s";
+    if (delta < 3600) return "il y a " + Math.floor(delta / 60) + " min";
+    if (delta < 86400) return "il y a " + Math.floor(delta / 3600) + "h";
+    return "il y a " + Math.floor(delta / 86400) + "j";
+  }
+  function ratingStars(r) {
+    const n = Math.round(Number(r) || 0);
+    return "★".repeat(Math.max(0, Math.min(5, n))) + "☆".repeat(Math.max(0, 5 - n));
+  }
+  function postStatusTag(s) {
+    const k = (s || "").toLowerCase();
+    if (k === "published" || k === "publie" || k === "publié") return "success";
+    if (k === "scheduled" || k === "pending" || k === "en_attente") return "accent";
+    if (k === "failed" || k === "error" || k === "rejected") return "danger";
+    return "";
+  }
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="globe" size={10}/> Google Business</span>
+            <span className="pill live"><span className="dot"/> Live · bot Telegram</span>
+          </div>
+          <EditableText tag="div" className="hp-title" multiline value="Activité en temps réel sur les fiches Google de tes clients."/>
+          <EditableText tag="div" className="hp-sub" multiline value="Posts, réponses aux avis, photos publiées, rapports de performance générés — tout est synchronisé avec ton bot."/>
+        </div>
+      </div>
+
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Note moyenne" tag="span"/><span className="trend flat">{totalAvis} avis</span></div>
+          <div className="kpi-value"><span className="mono">{noteMoy}</span><span className="unit">/5</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Avis (30j)" tag="span"/><span className="trend flat">total {totalAvis}</span></div>
+          <div className="kpi-value"><span className="mono">{avis30j}</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Posts publiés (30j)" tag="span"/><span className="trend flat">total {postsPublies}</span></div>
+          <div className="kpi-value"><span className="mono">{posts30j}</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Réponses aux avis (30j)" tag="span"/><span className="trend flat">total {totalReponsesAvis}</span></div>
+          <div className="kpi-value"><span className="mono">{reponses30j}</span></div>
+        </div>
+      </div>
+
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Posts en attente" tag="span"/></div>
+          <div className="kpi-value"><span className="mono">{postsAttente}</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Rapports générés" tag="span"/></div>
+          <div className="kpi-value"><span className="mono">{totalRapports}</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Dernier post" tag="span"/></div>
+          <div className="kpi-value"><span className="mono" style={{ fontSize: 14 }}>{relTime(dernierPost)}</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Dernier rapport" tag="span"/></div>
+          <div className="kpi-value"><span className="mono" style={{ fontSize: 14 }}>{relTime(dernierRapport)}</span></div>
+        </div>
+      </div>
+
+      <div className="row" style={{ gap: 6 }}>
+        {[
+          { id: "activity", label: "Activité par client", count: activity.length },
+          { id: "posts",    label: "Posts",                count: posts.length },
+          { id: "reviews",  label: "Avis & réponses",      count: reviews.length },
+          { id: "reports",  label: "Rapports",             count: reports.length },
+        ].map(t => (
+          <button key={t.id} className={"chip " + (tab === t.id ? "active" : "")} onClick={() => setTab(t.id)}>
+            {t.label} <span className="count">{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {tab === "activity" && (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <EditableText tag="div" className="card-title" value="Activité GMB par client"/>
+              <EditableText tag="div" className="card-sub" value="Compteurs live alimentés par le bot Telegram"/>
+            </div>
+          </div>
+          <table className="data">
+            <thead>
+              <tr>
+                <EditableText tag="th" value="Client"/>
+                <EditableText tag="th" value="Établissement"/>
+                <EditableText tag="th" value="Posts publiés"/>
+                <EditableText tag="th" value="Posts 30j"/>
+                <EditableText tag="th" value="En attente"/>
+                <EditableText tag="th" value="Réponses avis 30j"/>
+                <EditableText tag="th" value="Dernier post"/>
+                <EditableText tag="th" value="Dernier rapport"/>
+              </tr>
+            </thead>
+            <tbody>
+              {activity.map((a, i) => (
+                <tr key={i}>
+                  <td><strong>{a.agency_client_nom || "—"}</strong></td>
+                  <td className="muted small">{a.gmb_company_name || a.gmb_client_id || "—"}</td>
+                  <td className="mono">{a.posts_publies || 0}</td>
+                  <td className="mono">{a.posts_30j || 0}</td>
+                  <td className="mono">{a.posts_en_attente || 0}</td>
+                  <td className="mono">{a.reponses_30j || 0}</td>
+                  <td className="muted small">{relTime(a.dernier_post_le)}</td>
+                  <td className="muted small">{relTime(a.dernier_rapport_le)}</td>
+                </tr>
+              ))}
+              {activity.length === 0 && (
+                <tr><td colSpan="8" className="muted small" style={{ textAlign: "center", padding: 20 }}>Aucune activité GMB pour l'instant.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "posts" && (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <EditableText tag="div" className="card-title" value="Posts Google Business"/>
+              <EditableText tag="div" className="card-sub" value="50 derniers posts publiés ou planifiés"/>
+            </div>
+            <span className="pill live"><span className="dot"/> Temps réel</span>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {posts.length === 0 && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Aucun post pour l'instant.</div>}
+            {posts.map((p, i) => (
+              <div key={p.post_id || i} style={{ padding: "14px 18px", borderBottom: i < posts.length - 1 ? "1px solid var(--border-soft)" : "0" }}>
+                <div className="row between" style={{ marginBottom: 6 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <span className={"tag " + postStatusTag(p.status)}>{p.status || "—"}</span>
+                    {p.cta_type && <span className="tag">{p.cta_type}</span>}
+                  </div>
+                  <span className="mono small muted">{relTime(p.published_at || p.created_at)}</span>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 6 }}>{p.post_text || "—"}</div>
+                <div className="row" style={{ gap: 12 }}>
+                  {p.scheduled_at && <span className="small muted">📅 Planifié : {fmtDateTime(p.scheduled_at)}</span>}
+                  {p.published_at && <span className="small" style={{ color: "var(--success)" }}>✓ Publié : {fmtDateTime(p.published_at)}</span>}
+                  {p.cta_url && (
+                    <a className="small" href={p.cta_url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>
+                      <Icon name="external" size={11}/> Lien CTA
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "reviews" && (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <EditableText tag="div" className="card-title" value="Avis Google & réponses du bot"/>
+              <EditableText tag="div" className="card-sub" value="50 avis les plus récents"/>
+            </div>
+            <span className="pill live"><span className="dot"/> Temps réel</span>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {reviews.length === 0 && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Aucun avis pour l'instant.</div>}
+            {reviews.map((r, i) => (
+              <div key={r.review_id || i} style={{ padding: "14px 18px", borderBottom: i < reviews.length - 1 ? "1px solid var(--border-soft)" : "0" }}>
+                <div className="row between" style={{ marginBottom: 6 }}>
+                  <div className="row" style={{ gap: 10 }}>
+                    <span style={{ color: "oklch(0.78 0.13 80)", fontSize: 14 }}>{ratingStars(r.rating)}</span>
+                    <span className="small muted">Note {r.rating || "—"}/5</span>
+                  </div>
+                  <span className="mono small muted">{relTime(r.created_at)}</span>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5, marginBottom: r.reply_text ? 10 : 0 }}>"{r.review_text || "—"}"</div>
+                {r.reply_text && (
+                  <div style={{ padding: 10, background: "var(--surface-2)", borderRadius: 8, borderLeft: "3px solid var(--accent)" }}>
+                    <div className="row between" style={{ marginBottom: 4 }}>
+                      <span className="small" style={{ color: "var(--accent)", fontWeight: 600 }}><Icon name="sparkles" size={11}/> Réponse du bot</span>
+                      <span className="mono small muted">{relTime(r.replied_at)}</span>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5 }}>{r.reply_text}</div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "reports" && (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <EditableText tag="div" className="card-title" value="Rapports de performance GMB"/>
+              <EditableText tag="div" className="card-sub" value="Générés automatiquement par le bot"/>
+            </div>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {reports.length === 0 && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Aucun rapport pour l'instant.</div>}
+            {reports.map((r, i) => (
+              <div key={r.report_id || i} style={{ padding: "14px 18px", borderBottom: i < reports.length - 1 ? "1px solid var(--border-soft)" : "0" }}>
+                <div className="row between" style={{ marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 2 }}>
+                      Période · {fmtDate(r.periode_debut)} → {fmtDate(r.periode_fin)}
+                    </div>
+                    <div className="small muted">Généré {relTime(r.created_at)}</div>
+                  </div>
+                </div>
+                <div className="grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Vues</div>
+                    <div className="mono" style={{ fontWeight: 600 }}>{(r.total_vues || 0).toLocaleString("fr-FR")}</div>
+                  </div>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Appels</div>
+                    <div className="mono" style={{ fontWeight: 600 }}>{(r.total_appels || 0).toLocaleString("fr-FR")}</div>
+                  </div>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Clics site</div>
+                    <div className="mono" style={{ fontWeight: 600 }}>{(r.total_clics || 0).toLocaleString("fr-FR")}</div>
+                  </div>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Itinéraires</div>
+                    <div className="mono" style={{ fontWeight: 600 }}>{(r.total_itineraires || 0).toLocaleString("fr-FR")}</div>
+                  </div>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Nouveaux avis</div>
+                    <div className="mono" style={{ fontWeight: 600 }}>{(r.nouveaux_avis || 0).toLocaleString("fr-FR")}</div>
+                  </div>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Réponses avis</div>
+                    <div className="mono" style={{ fontWeight: 600 }}>{(r.avis_replies || 0).toLocaleString("fr-FR")}</div>
+                  </div>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Posts publiés</div>
+                    <div className="mono" style={{ fontWeight: 600 }}>{(r.posts_total || 0).toLocaleString("fr-FR")}</div>
+                  </div>
+                  <div style={{ padding: 10, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>ID rapport</div>
+                    <div className="mono small muted" style={{ fontSize: 10.5 }}>{r.report_id || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+window.ScreenGMB = ScreenGMB;
 
 /* ============ DataEditDrawer (admin global edit panel) ============ */
 const TABLE_SCHEMAS = {
@@ -4592,6 +4939,7 @@ function buildNav(isAdmin) {
     ]},
     { group: "Écosystème", items: [
       { id: "customers",    label: "CRM",          icon: "customers" },
+      { id: "gmb",          label: "Google Business", icon: "globe" },
       { id: "integrations", label: "Intégrations", icon: "integrations" },
     ]},
   ];
@@ -4611,6 +4959,7 @@ const SCREEN_META = {
   ai:           { title: "Activité IA",    sub: "Agent HelpAi",                            breadcrumb: "Intelligence" },
   automations:  { title: "Automations",    sub: "Workflows et déclencheurs",               breadcrumb: "Intelligence" },
   customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
+  gmb:          { title: "Google Business", sub: "Activité live · posts, avis, rapports — alimenté par le bot Telegram", breadcrumb: "Écosystème" },
   architecture: { title: "Architecture",   sub: "Infrastructure HelpAi — 5 piliers",        breadcrumb: "Infrastructure" },
   integrations: { title: "Intégrations",   sub: "Services connectés à votre espace",       breadcrumb: "Écosystème" },
   clients:      { title: "Gestion des clients", sub: "Portfolio agence — édition complète & connecteurs API", breadcrumb: "Admin" },
@@ -4671,6 +5020,7 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
       case "ai":          return <ScreenAI/>;
       case "automations": return isAdmin ? <ScreenAutomations/> : <ScreenOverview/>;
       case "customers":   return <ScreenCustomers/>;
+      case "gmb":         return <ScreenGMB/>;
       case "architecture":return <ScreenArchitecture/>;
       case "integrations":return <ScreenIntegrations/>;
       case "clients":     return isAdmin ? <ScreenClientsAdmin onViewClient={viewAsClient} onRefresh={refresh} tick={tick}/> : <ScreenOverview/>;
