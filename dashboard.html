@@ -4368,14 +4368,45 @@ window.ScreenCustomers = ScreenCustomers;
   <script type="text/babel" data-presets="env,react">
 /* AI Activity, Automations, Integrations, Team screens */
 
+/* Helper used by both ScreenAI and ScreenAds to format relative time */
+function helpAiRelTime(iso, nowMs) {
+  if (!iso) return "—";
+  const now = nowMs || Date.now();
+  const delta = Math.floor((now - new Date(iso).getTime()) / 1000);
+  if (delta < 0) {
+    const future = -delta;
+    if (future < 3600)  return "dans " + Math.floor(future / 60) + " min";
+    if (future < 86400) return "dans " + Math.floor(future / 3600) + "h";
+    return "dans " + Math.floor(future / 86400) + "j";
+  }
+  if (delta < 60)    return "il y a " + delta + "s";
+  if (delta < 3600)  return "il y a " + Math.floor(delta / 60) + " min";
+  if (delta < 86400) return "il y a " + Math.floor(delta / 3600) + "h";
+  return "il y a " + Math.floor(delta / 86400) + "j";
+}
+
 function ScreenAI() {
   const scheduledPosts = window.__HELPAI_SCHEDULED_POSTS || [];
   const reviews        = window.__HELPAI_GMB_REVIEWS || [];
   const reports        = window.__HELPAI_GMB_REPORTS || [];
   const leads          = window.__HELPAI_LEADS_ROWS || [];
-  const kpisRows       = window.__HELPAI_KPIS_ROWS || [];
-  const lsaLeads       = window.__HELPAI_LSA_LEADS || [];
   const clients        = window.__HELPAI_CLIENTS_ROWS || [];
+
+  const range = ((window.__HELPAI_RANGE && window.__HELPAI_RANGE.preset) || "12m").toLowerCase();
+  const customStorageKey = "helpai_ai_actions::" + range;
+
+  const [customActions, setCustomActions] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem(customStorageKey) || "[]"); }
+    catch (e) { return []; }
+  });
+  React.useEffect(() => {
+    try { setCustomActions(JSON.parse(localStorage.getItem(customStorageKey) || "[]")); }
+    catch (e) { setCustomActions([]); }
+  }, [customStorageKey]);
+  const persistCustom = (arr) => {
+    setCustomActions(arr);
+    try { localStorage.setItem(customStorageKey, JSON.stringify(arr)); } catch (e) {}
+  };
 
   const now = Date.now();
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
@@ -4386,10 +4417,11 @@ function ScreenAI() {
   const reviewsRepliedThisMonth = reviews.filter(r => r.replied_at && new Date(r.replied_at) >= monthStart);
   const reportsThisMonth = reports.filter(r => r.created_at && new Date(r.created_at) >= monthStart);
 
-  const totalActions = postsPublished.length + reviews.filter(r => r.reply_text).length + reports.length;
+  const totalActionsLive = postsPublished.length + reviews.filter(r => r.reply_text).length + reports.length;
+  const totalActions = totalActionsLive + customActions.filter(a => a.kind === "past").length;
   const actionsThisMonth = postsThisMonth.length + reviewsRepliedThisMonth.length + reportsThisMonth.length;
 
-  const minutesSaved = postsPublished.length * 5 + reviews.filter(r => r.reply_text).length * 3 + reports.length * 30;
+  const minutesSaved = postsPublished.length * 5 + reviews.filter(r => r.reply_text).length * 3 + reports.length * 30 + customActions.filter(a => a.kind === "past").length * 5;
   const daysSaved = (minutesSaved / 60 / 8).toFixed(1);
   const minutesSavedMonth = postsThisMonth.length * 5 + reviewsRepliedThisMonth.length * 3 + reportsThisMonth.length * 30;
   const daysSavedMonth = (minutesSavedMonth / 60 / 8).toFixed(1);
@@ -4402,42 +4434,8 @@ function ScreenAI() {
     return ageDays >= 3;
   });
 
-  const curMonth = new Date().toISOString().slice(0,7);
-  const adsKpisCur = kpisRows.filter(k => (k.periode || "").slice(0,7) === curMonth && (k.source === "google_ads" || k.source === "meta"));
-  const sumK = (rows, src, k) => rows.filter(r => r.source === src).reduce((s, r) => s + Number(r[k] || 0), 0);
-  const adsBySource = ["google_ads", "meta"].map(src => ({
-    src,
-    label: src === "google_ads" ? "Google Ads" : "Meta Ads",
-    color: src === "google_ads" ? "oklch(0.80 0.120 60)" : "oklch(0.74 0.155 55)",
-    leads: sumK(adsKpisCur, src, "nb_leads"),
-    depense: sumK(adsKpisCur, src, "depense"),
-    ca: sumK(adsKpisCur, src, "ca_genere"),
-    deals: sumK(adsKpisCur, src, "deals"),
-    cpl: sumK(adsKpisCur, src, "cout_par_lead"),
-    roas: kpisRows.filter(k => (k.periode || "").slice(0,7) === curMonth && k.source === src).reduce((m, k) => Math.max(m, Number(k.roas) || 0), 0),
-  }));
+  const customFutureCount = customActions.filter(a => a.kind === "future").length;
 
-  function relTime(iso) {
-    if (!iso) return "—";
-    const delta = Math.floor((now - new Date(iso).getTime()) / 1000);
-    if (delta < 0) {
-      const future = -delta;
-      if (future < 3600) return "dans " + Math.floor(future / 60) + " min";
-      if (future < 86400) return "dans " + Math.floor(future / 3600) + "h";
-      return "dans " + Math.floor(future / 86400) + "j";
-    }
-    if (delta < 60) return "il y a " + delta + "s";
-    if (delta < 3600) return "il y a " + Math.floor(delta / 60) + " min";
-    if (delta < 86400) return "il y a " + Math.floor(delta / 3600) + "h";
-    return "il y a " + Math.floor(delta / 86400) + "j";
-  }
-  function postStatusTag(s) {
-    const k = (s || "").toLowerCase();
-    if (k === "published") return "success";
-    if (k === "scheduled" || k === "pending") return "accent";
-    if (k === "failed" || k === "error") return "danger";
-    return "";
-  }
   function clientNameByGmbId(gmbId) {
     const c = clients.find(x => x.gmb_client_id === gmbId);
     return c ? c.nom : (gmbId || "—");
@@ -4447,99 +4445,121 @@ function ScreenAI() {
     return c ? c.nom : "—";
   }
 
+  // Build live feed (real bot actions)
   const feed = [];
   postsPublished.slice(0, 30).forEach(p => {
-    feed.push({
-      type: "post",
-      label: "Post publié sur GMB",
-      who: clientNameByGmbId(p.client_id),
-      detail: (p.post_text || "").slice(0, 140) + ((p.post_text || "").length > 140 ? "…" : ""),
-      time: p.published_at || p.created_at,
-      icon: "globe",
-      tone: "var(--success)",
-    });
+    feed.push({ id: "p-" + p.id, type: "post", label: "Post publié sur GMB", who: clientNameByGmbId(p.client_id), detail: (p.post_text || "").slice(0, 140) + ((p.post_text || "").length > 140 ? "…" : ""), time: p.published_at || p.created_at, icon: "globe", tone: "var(--success)" });
   });
   reviews.filter(r => r.reply_text).slice(0, 30).forEach(r => {
-    feed.push({
-      type: "reply",
-      label: "Réponse à un avis (note " + (r.rating || "?") + "/5)",
-      who: clientNameById(r.agency_client_id),
-      detail: (r.reply_text || "").slice(0, 140),
-      time: r.replied_at || r.created_at,
-      icon: "sparkles",
-      tone: "var(--accent)",
-    });
+    feed.push({ id: "r-" + r.review_id, type: "reply", label: "Réponse à un avis (note " + (r.rating || "?") + "/5)", who: clientNameById(r.agency_client_id), detail: (r.reply_text || "").slice(0, 140), time: r.replied_at || r.created_at, icon: "sparkles", tone: "var(--accent)" });
   });
   reports.slice(0, 30).forEach(r => {
-    feed.push({
-      type: "report",
-      label: "Rapport de performance généré",
-      who: clientNameById(r.agency_client_id),
-      detail: "Période " + (r.periode_debut || "?") + " → " + (r.periode_fin || "?") + " · " + (r.total_vues || 0) + " vues",
-      time: r.created_at,
-      icon: "save",
-      tone: "var(--info)",
-    });
+    feed.push({ id: "rep-" + r.report_id, type: "report", label: "Rapport de performance généré", who: clientNameById(r.agency_client_id), detail: "Période " + (r.periode_debut || "?") + " → " + (r.periode_fin || "?") + " · " + (r.total_vues || 0) + " vues", time: r.created_at, icon: "save", tone: "var(--info)" });
+  });
+  // Merge custom past actions
+  customActions.filter(a => a.kind === "past").forEach(a => {
+    feed.push({ id: a.id, type: "custom-past", label: a.label || "Action IA", who: a.who || "—", detail: a.detail || "", time: a.time, icon: a.icon || "sparkles", tone: a.tone || "var(--accent)", custom: true });
   });
   feed.sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
-  const feedTop = feed.slice(0, 12);
+  const feedTop = feed.slice(0, 12 + customActions.filter(a => a.kind === "past").length);
+
+  function addAction(kind) {
+    const id = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : ("act-" + Date.now()));
+    const t = kind === "future" ? new Date(now + 86400000 * 2) : new Date();
+    const newAction = {
+      id,
+      kind,
+      label: kind === "future" ? "Action planifiée" : "Action IA réalisée",
+      who: "Client à définir",
+      detail: "Décris ici l'action — texte modifiable.",
+      time: t.toISOString(),
+      icon: kind === "future" ? "calendar" : "sparkles",
+      tone: kind === "future" ? "var(--accent)" : "var(--accent)",
+    };
+    persistCustom([...customActions, newAction]);
+  }
+  function deleteAction(id) {
+    persistCustom(customActions.filter(a => a.id !== id));
+  }
+  function updateActionField(id, field, value) {
+    persistCustom(customActions.map(a => a.id === id ? { ...a, [field]: value } : a));
+  }
 
   return (
     <div className="stack-lg fade-up">
       <div className="hero-panel">
         <div>
           <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-            <span className="tag accent"><Icon name="sparkles" size={10}/> <EditableText value="Agent HelpAi" tag="span"/></span>
-            <span className="pill live"><span className="dot"/> <EditableText value="Actif 24/7 · données live" tag="span"/></span>
+            <span className="tag accent"><Icon name="sparkles" size={10}/> <EditableText value="Agent HelpAi" storageKey="ai.hero.tag" tag="span"/></span>
+            <span className="pill live"><span className="dot"/> <EditableText value="Actif 24/7 · données live" storageKey="ai.hero.pill" tag="span"/></span>
           </div>
-          <EditableText value={"L'IA a réalisé " + totalActions + " action" + (totalActions > 1 ? "s" : "") + " — " + daysSaved + " jour" + (Number(daysSaved) > 1 ? "s" : "") + " de travail économisé."} tag="div" className="hp-title" multiline/>
-          <EditableText value="Posts GMB, réponses aux avis, rapports de performance, gestion des relances — tout est synchronisé en temps réel avec le bot Telegram." tag="div" className="hp-sub" multiline/>
+          <EditableText storageKey="ai.hero.title" value={"L'IA a réalisé " + totalActions + " action" + (totalActions > 1 ? "s" : "") + " — " + daysSaved + " jour" + (Number(daysSaved) > 1 ? "s" : "") + " de travail économisé."} tag="div" className="hp-title" multiline/>
+          <EditableText storageKey="ai.hero.sub" value="Posts GMB, réponses aux avis, rapports de performance, gestion des relances — tout est synchronisé en temps réel avec le bot Telegram." tag="div" className="hp-sub" multiline/>
         </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         <div className="kpi">
-          <div className="kpi-label"><EditableText value="Actions IA (total)" tag="span"/><span className="trend up">+{actionsThisMonth} ce mois</span></div>
-          <div className="kpi-value"><span className="mono">{totalActions.toLocaleString("fr-FR")}</span></div>
+          <div className="kpi-label"><EditableText value="Actions IA (total)" storageKey="ai.kpi.label.0" tag="span"/><span className="trend up">+{actionsThisMonth} ce mois</span></div>
+          <div className="kpi-value"><EditableText value={totalActions.toLocaleString("fr-FR")} storageKey="ai.kpi.value.0" tag="span" className="mono"/></div>
         </div>
         <div className="kpi">
-          <div className="kpi-label"><EditableText value="Temps économisé" tag="span"/><span className="trend up">+{daysSavedMonth}j ce mois</span></div>
-          <div className="kpi-value"><span className="mono">{daysSaved}</span><span className="unit">jours</span></div>
+          <div className="kpi-label"><EditableText value="Temps économisé" storageKey="ai.kpi.label.1" tag="span"/><span className="trend up">+{daysSavedMonth}j ce mois</span></div>
+          <div className="kpi-value"><EditableText value={String(daysSaved)} storageKey="ai.kpi.value.1" tag="span" className="mono"/><span className="unit">jours</span></div>
         </div>
         <div className="kpi">
-          <div className="kpi-label"><EditableText value="Posts planifiés" tag="span"/></div>
-          <div className="kpi-value"><span className="mono">{postsScheduled.length}</span></div>
+          <div className="kpi-label"><EditableText value="Posts planifiés" storageKey="ai.kpi.label.2" tag="span"/></div>
+          <div className="kpi-value"><EditableText value={String(postsScheduled.length + customFutureCount)} storageKey="ai.kpi.value.2" tag="span" className="mono"/></div>
         </div>
         <div className="kpi">
-          <div className="kpi-label"><EditableText value="Leads à relancer" tag="span"/></div>
-          <div className="kpi-value"><span className="mono">{leadsToFollowUp.length}</span></div>
+          <div className="kpi-label"><EditableText value="Leads à relancer" storageKey="ai.kpi.label.3" tag="span"/></div>
+          <div className="kpi-value"><EditableText value={String(leadsToFollowUp.length)} storageKey="ai.kpi.value.3" tag="span" className="mono"/></div>
         </div>
       </div>
 
       <div className="grid g-2">
+        {/* Activité récente */}
         <div className="card">
           <div className="card-head">
             <div>
-              <EditableText value="Activité GMB récente" tag="div" className="card-title"/>
-              <EditableText value="Posts publiés, réponses aux avis, rapports générés" tag="div" className="card-sub"/>
+              <EditableText value="Activité GMB récente" storageKey="ai.recent.title" tag="div" className="card-title"/>
+              <EditableText value="Posts publiés, réponses aux avis, rapports générés" storageKey="ai.recent.sub" tag="div" className="card-sub"/>
             </div>
-            <span className="pill live"><span className="dot"/> Temps réel</span>
+            <button className="btn primary small" onClick={() => addAction("past")}>
+              <Icon name="plus" size={12}/> Ajouter
+            </button>
           </div>
           <div className="card-body" style={{ padding: 0, maxHeight: 520, overflow: "auto" }}>
             {feedTop.length === 0 && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Aucune activité IA pour l'instant.</div>}
             {feedTop.map((f, i) => (
-              <div key={i} style={{ padding: "12px 18px", borderBottom: i < feedTop.length - 1 ? "1px solid var(--border-soft)" : "0" }}>
+              <div key={f.id || i} style={{ padding: "12px 18px", borderBottom: i < feedTop.length - 1 ? "1px solid var(--border-soft)" : "0" }}>
                 <div className="row" style={{ gap: 10, alignItems: "flex-start" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--surface-2)", color: f.tone, display: "grid", placeItems: "center", flexShrink: 0 }}>
                     <Icon name={f.icon} size={14}/>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="row between" style={{ marginBottom: 2 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>{f.label}</span>
-                      <span className="mono small muted">{relTime(f.time)}</span>
+                      {f.custom
+                        ? <EditableText value={f.label} storageKey={"ai.action." + f.id + ".label"} tag="span" style={{ fontSize: 12.5, fontWeight: 600 }}
+                                        onCommit={(v) => updateActionField(f.id, "label", v)}/>
+                        : <EditableText value={f.label} storageKey={"ai.feed." + f.id + ".label"} tag="span" style={{ fontSize: 12.5, fontWeight: 600 }}/>}
+                      <span className="row" style={{ gap: 8, alignItems: "center" }}>
+                        <span className="mono small muted">{helpAiRelTime(f.time, now)}</span>
+                        {f.custom && (
+                          <button className="btn icon ghost small" onClick={() => deleteAction(f.id)} title="Supprimer" style={{ color: "var(--danger)", height: 22, width: 22 }}>×</button>
+                        )}
+                      </span>
                     </div>
-                    <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>Client : <strong style={{ color: "var(--text-2)" }}>{f.who}</strong></div>
-                    <div className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}>{f.detail}</div>
+                    <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>
+                      Client : {f.custom
+                        ? <EditableText value={f.who} storageKey={"ai.action." + f.id + ".who"} tag="strong" style={{ color: "var(--text-2)" }}
+                                        onCommit={(v) => updateActionField(f.id, "who", v)}/>
+                        : <EditableText value={f.who} storageKey={"ai.feed." + f.id + ".who"} tag="strong" style={{ color: "var(--text-2)" }}/>}
+                    </div>
+                    {f.custom
+                      ? <EditableText value={f.detail} multiline storageKey={"ai.action." + f.id + ".detail"} tag="div" className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}
+                                      onCommit={(v) => updateActionField(f.id, "detail", v)}/>
+                      : <EditableText value={f.detail} multiline storageKey={"ai.feed." + f.id + ".detail"} tag="div" className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}/>}
                   </div>
                 </div>
               </div>
@@ -4547,26 +4567,52 @@ function ScreenAI() {
           </div>
         </div>
 
+        {/* À venir */}
         <div className="card">
           <div className="card-head">
             <div>
-              <EditableText value="Activité à venir" tag="div" className="card-title"/>
-              <EditableText value="Posts planifiés et leads à relancer" tag="div" className="card-sub"/>
+              <EditableText value="Activité à venir" storageKey="ai.upcoming.title" tag="div" className="card-title"/>
+              <EditableText value="Posts planifiés et leads à relancer" storageKey="ai.upcoming.sub" tag="div" className="card-sub"/>
             </div>
+            <button className="btn primary small" onClick={() => addAction("future")}>
+              <Icon name="plus" size={12}/> Ajouter
+            </button>
           </div>
           <div className="card-body" style={{ padding: 0, maxHeight: 520, overflow: "auto" }}>
-            {postsScheduled.length === 0 && leadsToFollowUp.length === 0 && (
+            {postsScheduled.length === 0 && leadsToFollowUp.length === 0 && customActions.filter(a => a.kind === "future").length === 0 && (
               <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Rien de planifié pour l'instant.</div>
             )}
+            {customActions.filter(a => a.kind === "future").map((a) => (
+              <div key={a.id} style={{ padding: "12px 18px", borderBottom: "1px solid var(--border-soft)" }}>
+                <div className="row between" style={{ marginBottom: 4 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <Icon name={a.icon || "calendar"} size={13} style={{ color: "var(--accent)" }}/>
+                    <EditableText value={a.label} storageKey={"ai.action." + a.id + ".label"} tag="span" style={{ fontSize: 12.5, fontWeight: 600 }}
+                                  onCommit={(v) => updateActionField(a.id, "label", v)}/>
+                    <span className="tag accent">planifié</span>
+                  </div>
+                  <span className="row" style={{ gap: 8 }}>
+                    <span className="mono small" style={{ color: "var(--accent)" }}>{helpAiRelTime(a.time, now)}</span>
+                    <button className="btn icon ghost small" onClick={() => deleteAction(a.id)} title="Supprimer" style={{ color: "var(--danger)", height: 22, width: 22 }}>×</button>
+                  </span>
+                </div>
+                <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>
+                  Client : <EditableText value={a.who} storageKey={"ai.action." + a.id + ".who"} tag="strong" style={{ color: "var(--text-2)" }}
+                                         onCommit={(v) => updateActionField(a.id, "who", v)}/>
+                </div>
+                <EditableText value={a.detail} multiline storageKey={"ai.action." + a.id + ".detail"} tag="div" className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}
+                              onCommit={(v) => updateActionField(a.id, "detail", v)}/>
+              </div>
+            ))}
             {postsScheduled.slice(0, 8).map((p) => (
               <div key={"sp-" + p.id} style={{ padding: "12px 18px", borderBottom: "1px solid var(--border-soft)" }}>
                 <div className="row between" style={{ marginBottom: 4 }}>
                   <div className="row" style={{ gap: 8 }}>
                     <Icon name="calendar" size={13} style={{ color: "var(--accent)" }}/>
                     <span style={{ fontSize: 12.5, fontWeight: 600 }}>Post GMB planifié</span>
-                    <span className={"tag " + postStatusTag(p.status)}>{p.status}</span>
+                    <span className={"tag accent"}>{p.status}</span>
                   </div>
-                  <span className="mono small" style={{ color: "var(--accent)" }}>{relTime(p.scheduled_at)}</span>
+                  <span className="mono small" style={{ color: "var(--accent)" }}>{helpAiRelTime(p.scheduled_at, now)}</span>
                 </div>
                 <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>Client : <strong style={{ color: "var(--text-2)" }}>{clientNameByGmbId(p.client_id)}</strong></div>
                 <div className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}>{(p.post_text || "").slice(0, 120)}…</div>
@@ -4592,50 +4638,108 @@ function ScreenAI() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ============ Ads (Google Ads + Meta Ads + LSA) ============ */
+function ScreenAds() {
+  const kpisRows = window.__HELPAI_KPIS_ROWS || [];
+  const lsaLeads = window.__HELPAI_LSA_LEADS || [];
+
+  const range = ((window.__HELPAI_RANGE && window.__HELPAI_RANGE.preset) || "12m").toLowerCase();
+  const curMonth = new Date().toISOString().slice(0,7);
+
+  // Aggregate over the loaded kpis (already date-range-filtered upstream)
+  const sumK = (rows, src, k) => rows.filter(r => r.source === src).reduce((s, r) => s + Number(r[k] || 0), 0);
+  const adsBySource = ["google_ads", "meta"].map(src => ({
+    src,
+    label: src === "google_ads" ? "Google Ads" : "Meta Ads",
+    color: src === "google_ads" ? "oklch(0.80 0.120 60)" : "oklch(0.74 0.155 55)",
+    leads:    sumK(kpisRows, src, "nb_leads"),
+    depense:  sumK(kpisRows, src, "depense"),
+    ca:       sumK(kpisRows, src, "ca_genere"),
+    deals:    sumK(kpisRows, src, "deals"),
+    impressions: sumK(kpisRows, src, "nb_impressions"),
+    clics:    sumK(kpisRows, src, "nb_clics"),
+    cpl:      sumK(kpisRows, src, "cout_par_lead"),
+    roas:     kpisRows.filter(k => k.source === src).reduce((m, k) => Math.max(m, Number(k.roas) || 0), 0),
+  }));
+
+  const totalLeads = adsBySource.reduce((s, a) => s + a.leads, 0);
+  const totalDepense = adsBySource.reduce((s, a) => s + a.depense, 0) / 100;
+  const totalCa = adsBySource.reduce((s, a) => s + a.ca, 0) / 100;
+  const avgCpl = totalLeads > 0 ? Math.round(totalDepense * 100 / totalLeads) : 0;
+  const avgRoas = totalDepense > 0 ? totalCa / totalDepense : 0;
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="acquisition" size={10}/> <EditableText value="Ads" storageKey="ads.hero.tag" tag="span"/></span>
+            <span className="pill live"><span className="dot"/> <EditableText value="Plage : " storageKey="ads.hero.pill.prefix" tag="span"/>{range}</span>
+          </div>
+          <EditableText storageKey="ads.hero.title" value="Performance Google Ads & Meta Ads" tag="div" className="hp-title" multiline/>
+          <EditableText storageKey="ads.hero.sub" value="Leads payants, dépense, CPL, ROAS, deals signés — alimenté par les KPIs synchronisés." tag="div" className="hp-sub" multiline/>
+        </div>
+      </div>
+
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Leads payants" storageKey="ads.kpi.label.0" tag="span"/></div>
+          <div className="kpi-value"><EditableText value={totalLeads.toLocaleString("fr-FR")} storageKey="ads.kpi.value.0" tag="span" className="mono"/></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="Dépense totale" storageKey="ads.kpi.label.1" tag="span"/></div>
+          <div className="kpi-value"><EditableText value={Math.round(totalDepense).toLocaleString("fr-FR")} storageKey="ads.kpi.value.1" tag="span" className="mono"/><span className="unit">€</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="CPL moyen" storageKey="ads.kpi.label.2" tag="span"/></div>
+          <div className="kpi-value"><EditableText value={String(avgCpl)} storageKey="ads.kpi.value.2" tag="span" className="mono"/><span className="unit">€</span></div>
+        </div>
+        <div className="kpi">
+          <div className="kpi-label"><EditableText value="ROAS cumulé" storageKey="ads.kpi.label.3" tag="span"/></div>
+          <div className="kpi-value"><EditableText value={avgRoas.toFixed(2)} storageKey="ads.kpi.value.3" tag="span" className="mono"/><span className="unit">x</span></div>
+        </div>
+      </div>
 
       <div className="card">
         <div className="card-head">
           <div>
-            <EditableText value="Performance Ads — mois courant" tag="div" className="card-title"/>
-            <EditableText value="Google Ads & Meta Ads · alimenté par les KPIs synchronisés" tag="div" className="card-sub"/>
+            <EditableText value="Performance par canal" storageKey="ads.perf.title" tag="div" className="card-title"/>
+            <EditableText value="Détail Google Ads & Meta Ads sur la plage sélectionnée" storageKey="ads.perf.sub" tag="div" className="card-sub"/>
           </div>
           {lsaLeads.length > 0 && <span className="tag accent">{lsaLeads.length} leads LSA</span>}
         </div>
         <div className="card-body grid g-2">
-          {adsBySource.map(a => (
+          {adsBySource.map((a, idx) => (
             <div key={a.src} style={{ padding: 16, border: "1px solid var(--border-soft)", borderRadius: 12, background: "var(--bg-2)" }}>
               <div className="row between" style={{ marginBottom: 12 }}>
                 <div className="row" style={{ gap: 8 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 3, background: a.color, display: "inline-block" }}/>
-                  <strong style={{ fontSize: 13 }}>{a.label}</strong>
+                  <EditableText value={a.label} storageKey={"ads.source." + a.src + ".label"} tag="strong" style={{ fontSize: 13 }}/>
                 </div>
                 <span className="tag">{curMonth}</span>
               </div>
               <div className="grid g-2" style={{ gap: 10 }}>
-                <div>
-                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Leads</div>
-                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{a.leads.toLocaleString("fr-FR")}</div>
-                </div>
-                <div>
-                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Dépense</div>
-                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{Math.round(a.depense / 100).toLocaleString("fr-FR")} €</div>
-                </div>
-                <div>
-                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>CPL moyen</div>
-                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{Math.round(a.cpl / 100)} €</div>
-                </div>
-                <div>
-                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>ROAS</div>
-                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{a.roas.toFixed(2)}x</div>
-                </div>
-                <div>
-                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Deals</div>
-                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{a.deals}</div>
-                </div>
-                <div>
-                  <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>CA généré</div>
-                  <div className="mono" style={{ fontWeight: 700, fontSize: 18 }}>{Math.round(a.ca / 100).toLocaleString("fr-FR")} €</div>
-                </div>
+                {[
+                  { k: "leads",       label: "Leads",        v: a.leads.toLocaleString("fr-FR") },
+                  { k: "depense",     label: "Dépense",      v: Math.round(a.depense / 100).toLocaleString("fr-FR") + " €" },
+                  { k: "cpl",         label: "CPL moyen",    v: Math.round(a.cpl / 100) + " €" },
+                  { k: "roas",        label: "ROAS",         v: a.roas.toFixed(2) + "x" },
+                  { k: "deals",       label: "Deals",        v: String(a.deals) },
+                  { k: "ca",          label: "CA généré",    v: Math.round(a.ca / 100).toLocaleString("fr-FR") + " €" },
+                  { k: "impressions", label: "Impressions",  v: a.impressions.toLocaleString("fr-FR") },
+                  { k: "clics",       label: "Clics",        v: a.clics.toLocaleString("fr-FR") },
+                ].map((m) => (
+                  <div key={m.k}>
+                    <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                      <EditableText value={m.label} storageKey={"ads.source." + a.src + "." + m.k + ".label"} tag="span"/>
+                    </div>
+                    <EditableText value={m.v} storageKey={"ads.source." + a.src + "." + m.k + ".value"} tag="div" className="mono" style={{ fontWeight: 700, fontSize: 18 }}/>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -4643,11 +4747,11 @@ function ScreenAI() {
         {lsaLeads.length > 0 && (
           <div style={{ borderTop: "1px solid var(--border-soft)", padding: "14px 18px" }}>
             <div className="row between" style={{ marginBottom: 10 }}>
-              <strong style={{ fontSize: 12.5 }}>Leads Google Local Services Ads (récents)</strong>
+              <EditableText value="Leads Google Local Services Ads (récents)" storageKey="ads.lsa.title" tag="strong" style={{ fontSize: 12.5 }}/>
               <span className="small muted">{lsaLeads.length} au total</span>
             </div>
             <div className="stack-sm">
-              {lsaLeads.slice(0, 5).map(l => (
+              {lsaLeads.slice(0, 8).map(l => (
                 <div key={l.id} className="row between" style={{ padding: 8, background: "var(--bg-2)", borderRadius: 8 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 12.5 }}>{l.customer_name || "Anonyme"}</div>
@@ -4655,7 +4759,7 @@ function ScreenAI() {
                   </div>
                   <div className="row" style={{ gap: 8 }}>
                     <span className="tag">{l.status || "—"}</span>
-                    <span className="mono small muted">{relTime(l.lead_created_at)}</span>
+                    <span className="mono small muted">{helpAiRelTime(l.lead_created_at)}</span>
                   </div>
                 </div>
               ))}
@@ -4666,6 +4770,8 @@ function ScreenAI() {
     </div>
   );
 }
+
+window.ScreenAds = ScreenAds;
 
 function ScreenAutomations() {
   const [tab, setTab] = React.useState("all");
@@ -5495,6 +5601,7 @@ function buildNav(isAdmin) {
       { id: "overview",    label: "Vue d'ensemble", icon: "overview" },
       { id: "acquisition", label: "Acquisition",    icon: "acquisition" },
       { id: "sales",       label: "Ventes",         icon: "sales" },
+      { id: "ads",         label: "Ads",            icon: "acquisition" },
     ]},
     { group: "Intelligence", items: [
       { id: "ai", label: "Activité IA", icon: "ai", badge: "Live" },
@@ -5520,7 +5627,8 @@ const SCREEN_META = {
   overview:     { title: "Vue d'ensemble", sub: "Performance globale · 12 derniers mois", breadcrumb: "Tableau de bord" },
   acquisition:  { title: "Acquisition",    sub: "Leads, canaux, campagnes et funnel",     breadcrumb: "Tableau de bord" },
   sales:        { title: "Ventes",         sub: "Performance commerciale et CA signé",    breadcrumb: "Tableau de bord" },
-  ai:           { title: "Activité IA",    sub: "Agent HelpAi",                            breadcrumb: "Intelligence" },
+  ai:           { title: "Activité IA",    sub: "Actions réalisées et planifiées par l'agent IA", breadcrumb: "Intelligence" },
+  ads:          { title: "Ads",            sub: "Google Ads & Meta Ads — performance live", breadcrumb: "Tableau de bord" },
   automations:  { title: "Automations",    sub: "Workflows et déclencheurs",               breadcrumb: "Intelligence" },
   customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
   gmb:          { title: "Google Business", sub: "Activité live · posts, avis, rapports — alimenté par le bot Telegram", breadcrumb: "Écosystème" },
@@ -5703,6 +5811,7 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
       case "overview":    return <ScreenOverview/>;
       case "acquisition": return <ScreenAcquisition/>;
       case "sales":       return <ScreenSales/>;
+      case "ads":         return <ScreenAds/>;
       case "ai":          return <ScreenAI/>;
       case "automations": return isAdmin ? <ScreenAutomations/> : <ScreenOverview/>;
       case "customers":   return <ScreenCustomers/>;
