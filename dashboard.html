@@ -1585,14 +1585,39 @@ async function loadAllData({ isAdmin, clientId, dateRange }) {
     t.pipeline = Math.max(t.pipeline, k.pipeline || 0);
   });
 
-  /* REVENUE_DATA */
-  const REVENUE_DATA = monthsArr.map(m => {
-    const t = totalByMonth[m.key] || {};
-    const ca = (t.ca_genere || 0) / 100;
-    return { m: m.label, ca, ads: (t.depense || 0) / 100, goal: Math.round(ca * 1.1) };
+  /* invoicesByMonth: sum payé invoice montant by YYYY-MM (fallback CA source) */
+  const invoicesByMonth = {};
+  invRows.forEach(i => {
+    const ts = i["payé_le"] || i.created_at;
+    if (!ts) return;
+    const key = String(ts).slice(0,7);
+    invoicesByMonth[key] = (invoicesByMonth[key] || 0) + (Number(i.montant) || 0);
   });
 
-  /* LEADS_DATA: ads = google_ads + meta, organic = gmb + site, referral = autre */
+  /* leadsByMonthFromTable: fallback when agency_kpis sources are sparse, count agency_leads by source bucket */
+  const leadsByMonthFromTable = {};
+  leadsRows.forEach(l => {
+    if (!l.created_at) return;
+    const key = String(l.created_at).slice(0,7);
+    const src = (l.source || '').toLowerCase();
+    if (!leadsByMonthFromTable[key]) leadsByMonthFromTable[key] = { ads: 0, organic: 0, referral: 0 };
+    if (src === 'google_ads' || src === 'meta')          leadsByMonthFromTable[key].ads++;
+    else if (src === 'gmb' || src === 'site')            leadsByMonthFromTable[key].organic++;
+    else if (src === 'autre' || src === 'referral')      leadsByMonthFromTable[key].referral++;
+    else                                                  leadsByMonthFromTable[key].organic++;
+  });
+
+  /* REVENUE_DATA — prefer agency_kpis ca_genere; fall back to summed invoices */
+  const REVENUE_DATA = monthsArr.map(m => {
+    const t = totalByMonth[m.key] || {};
+    const caKpi = (t.ca_genere || 0) / 100;
+    const caInv = (invoicesByMonth[m.key] || 0) / 100;
+    const ca = caKpi || caInv;
+    const ads = (t.depense || 0) / 100;
+    return { m: m.label, ca, ads, goal: Math.round(ca * 1.1) };
+  });
+
+  /* LEADS_DATA — prefer agency_kpis breakdown by source; fall back to agency_leads count */
   const leadsByMonthSource = {};
   kpisRows.filter(k => k.source !== 'total').forEach(k => {
     const key = (k.periode || '').slice(0,7);
@@ -1601,22 +1626,30 @@ async function loadAllData({ isAdmin, clientId, dateRange }) {
   });
   const LEADS_DATA = monthsArr.map(m => {
     const src = leadsByMonthSource[m.key] || {};
-    return {
-      m: m.label,
-      ads: (src.google_ads || 0) + (src.meta || 0),
-      organic: (src.gmb || 0) + (src.site || 0),
-      referral: (src.autre || 0),
-    };
+    const kpiAds      = (src.google_ads || 0) + (src.meta || 0);
+    const kpiOrganic  = (src.gmb || 0) + (src.site || 0);
+    const kpiReferral = (src.autre || 0);
+    const kpiTotal = kpiAds + kpiOrganic + kpiReferral;
+    if (kpiTotal > 0) {
+      return { m: m.label, ads: kpiAds, organic: kpiOrganic, referral: kpiReferral };
+    }
+    const fb = leadsByMonthFromTable[m.key] || { ads: 0, organic: 0, referral: 0 };
+    return { m: m.label, ads: fb.ads, organic: fb.organic, referral: fb.referral };
   });
 
-  /* ROAS_DATA */
+  /* ROAS_DATA — derive on the fly when kpis lack roas/cpl */
   const ROAS_DATA = monthsArr.map(m => {
     const t = totalByMonth[m.key] || {};
-    return {
-      m: m.label,
-      roas: Number(t.roas) || 0,
-      cpl: (t.cout_par_lead || 0) / 100,
-    };
+    const ads = (t.depense || 0) / 100;
+    const ca = ((t.ca_genere || 0) / 100) || ((invoicesByMonth[m.key] || 0) / 100);
+    const leadsFromKpis = (leadsByMonthSource[m.key] && Object.values(leadsByMonthSource[m.key]).reduce((s, n) => s + n, 0)) || 0;
+    const fb = leadsByMonthFromTable[m.key] || { ads: 0, organic: 0, referral: 0 };
+    const totalLeadsMonth = leadsFromKpis || (fb.ads + fb.organic + fb.referral);
+    const roasKpi = Number(t.roas) || 0;
+    const roas = roasKpi || (ads > 0 ? ca / ads : 0);
+    const cplKpi = (t.cout_par_lead || 0) / 100;
+    const cpl = cplKpi || (totalLeadsMonth > 0 ? Math.round(ads / totalLeadsMonth) : 0);
+    return { m: m.label, roas, cpl };
   });
 
   /* KPIs (6 cards) — current month totals + spark on 12 months */
@@ -5700,6 +5733,15 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
             <span>Chercher un lead, un client…</span>
             <kbd>⌘K</kbd>
           </div>
+          <div style={{ position: "relative" }}>
+            <button className="btn" onClick={() => setRangePickerOpen(o => !o)} title="Plage de dates" style={{ whiteSpace: "nowrap" }}>
+              <Icon name="calendar" size={13}/> {fmtRangeLabel(dateRange)}
+              <Icon name="chevDown" size={11} style={{ marginLeft: 4 }}/>
+            </button>
+            {rangePickerOpen && (
+              <DateRangePopover current={dateRange} onApply={(r) => { setDateRange(r); setRangePickerOpen(false); }} onClose={() => setRangePickerOpen(false)}/>
+            )}
+          </div>
           {isAdmin && (
             <button
               className={"btn " + (editorOpen ? "primary" : "")}
@@ -5741,14 +5783,7 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
               <h1 className="page-title">{meta.title}</h1>
               <div className="page-sub">{meta.sub}</div>
             </div>
-            <div className="page-actions" style={{ position: "relative" }}>
-              <button className="btn" onClick={() => setRangePickerOpen(o => !o)} title="Plage de dates">
-                <Icon name="calendar" size={13}/> {fmtRangeLabel(dateRange)}
-                <Icon name="chevDown" size={11} style={{ marginLeft: 4 }}/>
-              </button>
-              {rangePickerOpen && (
-                <DateRangePopover current={dateRange} onApply={(r) => { setDateRange(r); setRangePickerOpen(false); }} onClose={() => setRangePickerOpen(false)}/>
-              )}
+            <div className="page-actions">
               <button className="btn" onClick={refresh}>
                 <Icon name="refresh" size={13}/> Actualiser
               </button>
