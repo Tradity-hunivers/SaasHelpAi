@@ -4652,19 +4652,38 @@ function ScreenAds() {
 
   // Aggregate over the loaded kpis (already date-range-filtered upstream)
   const sumK = (rows, src, k) => rows.filter(r => r.source === src).reduce((s, r) => s + Number(r[k] || 0), 0);
-  const adsBySource = ["google_ads", "meta"].map(src => ({
-    src,
-    label: src === "google_ads" ? "Google Ads" : "Meta Ads",
-    color: src === "google_ads" ? "oklch(0.80 0.120 60)" : "oklch(0.74 0.155 55)",
-    leads:    sumK(kpisRows, src, "nb_leads"),
-    depense:  sumK(kpisRows, src, "depense"),
-    ca:       sumK(kpisRows, src, "ca_genere"),
-    deals:    sumK(kpisRows, src, "deals"),
-    impressions: sumK(kpisRows, src, "nb_impressions"),
-    clics:    sumK(kpisRows, src, "nb_clics"),
-    cpl:      sumK(kpisRows, src, "cout_par_lead"),
-    roas:     kpisRows.filter(k => k.source === src).reduce((m, k) => Math.max(m, Number(k.roas) || 0), 0),
-  }));
+  const adsBySource = ["google_ads", "meta", "lsa"].map(src => {
+    if (src === "lsa") {
+      // Local Services Ads — derived from lsa_leads (no spend / impressions in our schema)
+      const wonStatuses = new Set(["won", "deal", "gagné", "gagne", "converted"]);
+      return {
+        src,
+        label: "Local Services Ads",
+        color: "oklch(0.78 0.13 155)",
+        leads: lsaLeads.length,
+        depense: sumK(kpisRows, "lsa", "depense"),
+        ca: sumK(kpisRows, "lsa", "ca_genere"),
+        deals: lsaLeads.filter(l => wonStatuses.has(String(l.status || "").toLowerCase())).length,
+        impressions: sumK(kpisRows, "lsa", "nb_impressions"),
+        clics: sumK(kpisRows, "lsa", "nb_clics"),
+        cpl: sumK(kpisRows, "lsa", "cout_par_lead"),
+        roas: kpisRows.filter(k => k.source === "lsa").reduce((m, k) => Math.max(m, Number(k.roas) || 0), 0),
+      };
+    }
+    return {
+      src,
+      label: src === "google_ads" ? "Google Ads" : "Meta Ads",
+      color: src === "google_ads" ? "oklch(0.80 0.120 60)" : "oklch(0.74 0.155 55)",
+      leads:    sumK(kpisRows, src, "nb_leads"),
+      depense:  sumK(kpisRows, src, "depense"),
+      ca:       sumK(kpisRows, src, "ca_genere"),
+      deals:    sumK(kpisRows, src, "deals"),
+      impressions: sumK(kpisRows, src, "nb_impressions"),
+      clics:    sumK(kpisRows, src, "nb_clics"),
+      cpl:      sumK(kpisRows, src, "cout_par_lead"),
+      roas:     kpisRows.filter(k => k.source === src).reduce((m, k) => Math.max(m, Number(k.roas) || 0), 0),
+    };
+  });
 
   const totalLeads = adsBySource.reduce((s, a) => s + a.leads, 0);
   const totalDepense = adsBySource.reduce((s, a) => s + a.depense, 0) / 100;
@@ -4712,7 +4731,7 @@ function ScreenAds() {
           </div>
           {lsaLeads.length > 0 && <span className="tag accent">{lsaLeads.length} leads LSA</span>}
         </div>
-        <div className="card-body grid g-2">
+        <div className="card-body grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 }}>
           {adsBySource.map((a, idx) => (
             <div key={a.src} style={{ padding: 16, border: "1px solid var(--border-soft)", borderRadius: 12, background: "var(--bg-2)" }}>
               <div className="row between" style={{ marginBottom: 12 }}>
@@ -5601,7 +5620,6 @@ function buildNav(isAdmin) {
       { id: "overview",    label: "Vue d'ensemble", icon: "overview" },
       { id: "acquisition", label: "Acquisition",    icon: "acquisition" },
       { id: "sales",       label: "Ventes",         icon: "sales" },
-      { id: "ads",         label: "Ads",            icon: "acquisition" },
     ]},
     { group: "Intelligence", items: [
       { id: "ai", label: "Activité IA", icon: "ai", badge: "Live" },
@@ -5612,6 +5630,7 @@ function buildNav(isAdmin) {
     { group: "Écosystème", items: [
       { id: "customers",    label: "CRM",          icon: "customers" },
       { id: "gmb",          label: "Google Business", icon: "globe" },
+      { id: "ads",          label: "Ads",          icon: "acquisition" },
     ]},
   ];
   if (isAdmin) {
@@ -5628,7 +5647,7 @@ const SCREEN_META = {
   acquisition:  { title: "Acquisition",    sub: "Leads, canaux, campagnes et funnel",     breadcrumb: "Tableau de bord" },
   sales:        { title: "Ventes",         sub: "Performance commerciale et CA signé",    breadcrumb: "Tableau de bord" },
   ai:           { title: "Activité IA",    sub: "Actions réalisées et planifiées par l'agent IA", breadcrumb: "Intelligence" },
-  ads:          { title: "Ads",            sub: "Google Ads & Meta Ads — performance live", breadcrumb: "Tableau de bord" },
+  ads:          { title: "Ads",            sub: "Google Ads, Meta Ads & Local Services — performance live", breadcrumb: "Écosystème" },
   automations:  { title: "Automations",    sub: "Workflows et déclencheurs",               breadcrumb: "Intelligence" },
   customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
   gmb:          { title: "Google Business", sub: "Activité live · posts, avis, rapports — alimenté par le bot Telegram", breadcrumb: "Écosystème" },
