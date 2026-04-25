@@ -2047,7 +2047,10 @@ const C = CHART_COLORS;
 
 /* ============ Overview ============ */
 function ScreenOverview() {
-  const [range, setRange] = React.useState("12m");
+  const range = ((window.__HELPAI_RANGE && window.__HELPAI_RANGE.preset) || "12m").toLowerCase();
+  const setRange = (preset) => {
+    if (window.__HELPAI_setRangePreset) window.__HELPAI_setRangePreset(preset.toLowerCase());
+  };
   return (
     <div className="stack-lg fade-up">
       <div className="hero-panel">
@@ -2067,8 +2070,8 @@ function ScreenOverview() {
 
       <div className="row between">
         <div className="chips">
-          {["7j","30j","3m","12m","YTD"].map(r => (
-            <button key={r} className={"chip " + (range === r ? "active" : "")} onClick={() => setRange(r)}>{r}</button>
+          {["7j","30j","3m","6m","12m","YTD"].map(r => (
+            <button key={r} className={"chip " + (range === r.toLowerCase() ? "active" : "")} onClick={() => setRange(r)}>{r}</button>
           ))}
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -5588,6 +5591,13 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
     setDateRangeState(r);
     setRefreshKey(k => k + 1);
   }, []);
+
+  // Expose to screens (chips on Overview, etc.)
+  React.useEffect(() => {
+    window.__HELPAI_RANGE = dateRange;
+    window.__HELPAI_setRangePreset = (preset) => setDateRange(rangeFromPreset(preset));
+    window.__HELPAI_setRange = setDateRange;
+  }, [dateRange, setDateRange]);
 
   React.useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
