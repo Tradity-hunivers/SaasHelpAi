@@ -1321,15 +1321,17 @@ function EditableText({ value, tag = "span", className = "", style = {}, multili
   const ctx = React.useContext(window.__HelpAi_EditContext);
   const editing = forcedEditing !== undefined ? forcedEditing : (ctx && ctx.editing);
   // Persistence ONLY when an explicit storageKey is given.
-  // (We deliberately do NOT fall back to the value as a key, otherwise two KPIs
-  //  showing the same number would share the same override.)
-  const persistKey = storageKey || null;
+  // The persistKey is also scoped by the current date-range preset so that
+  // overrides made while looking at "7j" don't bleed into "30j" etc. — each
+  // range has its own independent slot per logical key.
+  const rangePreset = ((window.__HELPAI_RANGE && window.__HELPAI_RANGE.preset) || 'default').toLowerCase();
+  const persistKey = storageKey ? (storageKey + '::' + rangePreset) : null;
   const initialOverride = helpAiGetOverride(persistKey);
   const [val, setVal] = React.useState(initialOverride !== undefined ? initialOverride : value);
   const [active, setActive] = React.useState(false);
   const ref = React.useRef(null);
 
-  // When the underlying value prop changes (data refresh), prefer override if present, else new value
+  // Re-resolve when the value or the range-scoped persistKey changes
   React.useEffect(() => {
     const ov = helpAiGetOverride(persistKey);
     setVal(ov !== undefined ? ov : value);
