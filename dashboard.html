@@ -1502,6 +1502,15 @@ async function loadAllData({ isAdmin, clientId }) {
     } catch (e) { lsaLeadsRows = []; }
   }
 
+  /* gmb_clients (admin only — list of bot's GMB clients for dropdown picker) */
+  let gmbClientsRows = [];
+  if (isAdmin) {
+    try {
+      const { data } = await sb.from('gmb_clients').select('id,companyName,status,gbp_location_id').order('companyName', { ascending: true });
+      gmbClientsRows = data || [];
+    } catch (e) { gmbClientsRows = []; }
+  }
+
   /* KPIs cumulés : filtrer source='total' */
   const totals = kpisRows.filter(k => k.source === 'total');
   const totalByMonth = {};
@@ -1771,6 +1780,7 @@ async function loadAllData({ isAdmin, clientId }) {
     __HELPAI_SCHEDULED_POSTS: scheduledPostsRows,
     __HELPAI_LSA_LEADS: lsaLeadsRows,
     __HELPAI_KPIS_ROWS: kpisRows,
+    __HELPAI_GMB_CLIENT_LIST: gmbClientsRows,
   });
 }
 window.loadAllData = loadAllData;
@@ -2776,11 +2786,32 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                 </_AdminSection>
 
                 <_AdminSection title="Connecteurs API · tracking automatique">
-                  <_AdminField label="Google Business Profile (GMB) — Location ID"
-                               hint="Pour synchroniser avis & insights via API GMB.">
-                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
-                           placeholder="locations/1234567890"
-                           value={draft.gmb_client_id} onChange={e => setDraft({ ...draft, gmb_client_id: e.target.value })}/>
+                  <_AdminField label="Google Business Profile — Lier à une fiche du bot Telegram"
+                               hint={(() => {
+                                 const list = window.__HELPAI_GMB_CLIENT_LIST || [];
+                                 const match = list.find(g => g.id === draft.gmb_client_id);
+                                 if (match) return "✓ Lié à : " + match.companyName + " · GBP " + (match.gbp_location_id || "(non connecté)");
+                                 return "Sélectionne la fiche correspondante. Le slug est l'identifiant interne du bot — pas le numéro Google.";
+                               })()}>
+                    <select className="search"
+                            style={{ minWidth: 0, width: "100%", cursor: "pointer", color: "var(--text-1)" }}
+                            value={draft.gmb_client_id || ""}
+                            onChange={e => setDraft({ ...draft, gmb_client_id: e.target.value })}>
+                      <option value="">— Aucune fiche liée —</option>
+                      {(window.__HELPAI_GMB_CLIENT_LIST || []).filter(g => g.status === "ACTIVE").map(g => (
+                        <option key={g.id} value={g.id}>{g.companyName} ({g.id})</option>
+                      ))}
+                      {(window.__HELPAI_GMB_CLIENT_LIST || []).filter(g => g.status !== "ACTIVE").length > 0 && (
+                        <optgroup label="Archivés / inactifs">
+                          {(window.__HELPAI_GMB_CLIENT_LIST || []).filter(g => g.status !== "ACTIVE").map(g => (
+                            <option key={g.id} value={g.id}>{g.companyName} ({g.id})</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {draft.gmb_client_id && !(window.__HELPAI_GMB_CLIENT_LIST || []).some(g => g.id === draft.gmb_client_id) && (
+                        <option value={draft.gmb_client_id}>⚠ Slug saisi manuellement : {draft.gmb_client_id}</option>
+                      )}
+                    </select>
                   </_AdminField>
                   <_AdminField label="Google Ads — Customer ID"
                                hint="Format 123-456-7890 (sans tirets aussi accepté).">
