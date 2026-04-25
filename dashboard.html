@@ -2695,6 +2695,26 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
     }
   }
 
+  async function resyncGmb() {
+    if (!selected || !selected.gmb_client_id) return;
+    setFeedback({ type: "ok", msg: "Synchronisation en cours…" });
+    try {
+      const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/dashboard-link-gmb", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync", agencyClientId: selected.id }),
+      });
+      const data = await r.json();
+      if (!r.ok || data.error) {
+        setFeedback({ type: "error", msg: "Sync échouée : " + (data.error || r.status) + (data.detail ? " — " + data.detail : "") });
+        return;
+      }
+      setFeedback({ type: "ok", msg: data.synced + " avis synchronisés · " + data.newReviews + " nouveaux · note moyenne " + (data.totalAvg || "—") + "/5" });
+      if (onRefresh) onRefresh();
+    } catch (e) {
+      setFeedback({ type: "error", msg: String(e) });
+    }
+  }
+
   async function linkGmbLocation(loc) {
     if (!selected) return;
     setGmbPicker(p => ({ ...p, linking: loc.gbpLocationId, error: null }));
@@ -2716,13 +2736,13 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
         setGmbPicker(p => ({ ...p, linking: null, error: data.error + (data.details ? " — " + data.details : "") }));
         return;
       }
-      // Trigger initial sync (fire & forget)
-      fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/gmb-sync-reviews", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ establishmentId: data.establishmentId }),
-      }).catch(() => {});
+      // The Edge Function already runs the initial sync inline as part of the 'link' action.
+      const synced = data.sync && data.sync.ok ? data.sync : null;
       setGmbPicker({ open: false, loading: false, data: null, error: null, linking: null });
-      setFeedback({ type: "ok", msg: "Fiche Google liée : " + loc.title + ". Sync des avis lancée — rafraîchis dans 30 s." });
+      const syncMsg = synced
+        ? " · " + synced.newReviews + " avis synchronisés (note moyenne " + (synced.totalAvg || "—") + "/5)"
+        : (data.sync && data.sync.error ? " · sync échouée : " + data.sync.error : "");
+      setFeedback({ type: "ok", msg: "Fiche Google liée : " + loc.title + syncMsg + ". Refresh pour voir les KPIs." });
       if (onRefresh) onRefresh();
     } catch (e) {
       setGmbPicker(p => ({ ...p, linking: null, error: String(e) }));
@@ -2866,9 +2886,16 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                         <option value={draft.gmb_client_id}>⚠ Slug saisi manuellement : {draft.gmb_client_id}</option>
                       )}
                     </select>
-                    <button className="btn small" type="button" onClick={openGmbPicker} style={{ marginTop: 6 }}>
-                      <Icon name="plus" size={12}/> Connecter une fiche Google (parcourir mon compte)
-                    </button>
+                    <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                      <button className="btn small" type="button" onClick={openGmbPicker}>
+                        <Icon name="plus" size={12}/> Connecter une fiche Google
+                      </button>
+                      {draft.gmb_client_id && (
+                        <button className="btn small" type="button" onClick={resyncGmb} title="Re-fetch les avis depuis Google">
+                          <Icon name="refresh" size={12}/> Synchroniser maintenant
+                        </button>
+                      )}
+                    </div>
                   </_AdminField>
                   <_AdminField label="Google Ads — Customer ID"
                                hint="Format 123-456-7890 (sans tirets aussi accepté).">
