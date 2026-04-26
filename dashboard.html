@@ -2780,6 +2780,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
   const [saving, setSaving]         = React.useState(false);
   const [feedback, setFeedback]     = React.useState(null);
   const [gmbPicker, setGmbPicker]   = React.useState({ open: false, loading: false, data: null, error: null, linking: null });
+  const [previewBlog, setPreviewBlog] = React.useState(null); // { post } | null
 
   const selected = allClients.find(c => c.id === selectedId) || null;
 
@@ -3259,6 +3260,9 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                               </div>
                               <div className="row" style={{ gap: 6, flexShrink: 0 }}>
                                 <span className={"tag " + tone}>{b.statut}</span>
+                                <button className="btn small" onClick={() => setPreviewBlog({ post: b })} title="Aperçu">
+                                  <Icon name="eye" size={11}/> Aperçu
+                                </button>
                                 {b.statut !== "published" && (
                                   <button className="btn small primary" onClick={async () => {
                                     setFeedback({ type: "ok", msg: "Publication en cours sur GitHub…" });
@@ -3390,6 +3394,91 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
           </div>
         </div>
       )}
+
+      {/* Blog post preview modal */}
+      {previewBlog && previewBlog.post && (() => {
+        const p = previewBlog.post;
+        const readableMeta = [
+          p.statut ? "Statut : " + p.statut : "",
+          (p.nb_mots != null) ? p.nb_mots + " mots" : "",
+          (p.temps_lecture != null) ? p.temps_lecture + " min de lecture" : "",
+          p.created_at ? "Créé le " + new Date(p.created_at).toLocaleDateString("fr-FR") : "",
+        ].filter(Boolean).join(" · ");
+        return (
+          <div onClick={() => setPreviewBlog(null)}
+               style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "grid", placeItems: "center", padding: 24 }}>
+            <div onClick={e => e.stopPropagation()}
+                 style={{ width: "min(880px, 100%)", maxHeight: "90vh", display: "flex", flexDirection: "column",
+                          background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14,
+                          boxShadow: "0 24px 60px rgba(0,0,0,0.55)" }}>
+              <div className="row between" style={{ padding: "16px 22px", borderBottom: "1px solid var(--border)" }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>Aperçu de l'article</div>
+                  <div className="small muted">{readableMeta || "Aperçu"}</div>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  {p.statut !== "published" && (
+                    <button className="btn primary small" onClick={async () => {
+                      setFeedback({ type: "ok", msg: "Publication en cours sur GitHub…" });
+                      setPreviewBlog(null);
+                      try {
+                        const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/blog-publish", {
+                          method: "POST", headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ postId: p.id }),
+                        });
+                        const j = await r.json();
+                        if (!r.ok || j.error) { setFeedback({ type: "error", msg: "Publication échouée : " + (j.message || j.error || r.status) }); return; }
+                        setFeedback({ type: "ok", msg: "Article publié sur GitHub. Cloudflare Pages reconstruit le site dans 1-2 min." });
+                        if (onRefresh) onRefresh();
+                      } catch (e) { setFeedback({ type: "error", msg: String(e) }); }
+                    }}>
+                      <Icon name="external" size={12}/> Publier maintenant
+                    </button>
+                  )}
+                  <button className="btn icon ghost" onClick={() => setPreviewBlog(null)} title="Fermer">×</button>
+                </div>
+              </div>
+              <div style={{ flex: 1, overflow: "auto", padding: 28 }}>
+                <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", marginTop: 0, marginBottom: 12, lineHeight: 1.3 }}>
+                  {p.titre || "(Sans titre)"}
+                </h1>
+                {p.meta_description && (
+                  <div style={{ padding: "10px 14px", border: "1px dashed var(--border-soft)", borderRadius: 8, marginBottom: 18, fontSize: 13, color: "var(--text-2)", fontStyle: "italic" }}>
+                    {p.meta_description}
+                  </div>
+                )}
+                {p.mot_cle_principal && (
+                  <div className="row" style={{ gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+                    <span className="tag accent">Mot-clé : {p.mot_cle_principal}</span>
+                    {(p.mots_cles_secondaires || []).slice(0, 6).map((kw, i) => (
+                      <span key={i} className="tag">{kw}</span>
+                    ))}
+                  </div>
+                )}
+                <div
+                  className="blog-preview-content"
+                  style={{ fontSize: 14, lineHeight: 1.7, color: "var(--text-1)" }}
+                  dangerouslySetInnerHTML={{ __html: p.contenu_html || "<p>(Aucun contenu)</p>" }}
+                />
+                <style>{`
+                  .blog-preview-content h1 { font-size: 22px; font-weight: 700; margin: 28px 0 12px; }
+                  .blog-preview-content h2 { font-size: 18px; font-weight: 700; margin: 24px 0 10px; color: var(--text); }
+                  .blog-preview-content h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; }
+                  .blog-preview-content p  { margin: 0 0 14px; }
+                  .blog-preview-content ul, .blog-preview-content ol { margin: 0 0 14px; padding-left: 22px; }
+                  .blog-preview-content li { margin-bottom: 6px; }
+                  .blog-preview-content strong { color: var(--text); font-weight: 600; }
+                  .blog-preview-content a { color: var(--accent); }
+                `}</style>
+              </div>
+              <div style={{ padding: "10px 22px", borderTop: "1px solid var(--border-soft)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: "var(--text-3)" }}>
+                <span>Source : agency_blog_posts · ID {String(p.id).slice(0, 8)}</span>
+                <span>Slug : <code>{p.slug || "—"}</code></span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -3406,6 +3495,7 @@ function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
   const [docs, setDocs]   = React.useState([]);
   const [docsLoading, setDocsLoading] = React.useState(false);
   const [busy, setBusy] = React.useState({ email: false, phone: false, pwd: false });
+  const [pdfPreview, setPdfPreview] = React.useState(null); // { url, filename, save: () => void } | null
   const invoices = window.__HELPAI_INV_ROWS || [];
 
   React.useEffect(() => {
@@ -3602,8 +3692,31 @@ function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
     pdf.text("Rapport généré le " + new Date().toLocaleDateString("fr-FR") + " · HelpAi Agency", 40, y + 16);
 
     const filename = (doc.nom || "Rapport").replace(/[^A-Za-z0-9 _-]/g, "").trim().replace(/\s+/g, "_") + ".pdf";
-    pdf.save(filename);
+
+    // Show preview modal with iframe; user can confirm download
+    let blobUrl = null;
+    try {
+      const blob = pdf.output("blob");
+      blobUrl = URL.createObjectURL(blob);
+    } catch (e) {
+      // Fallback: direct save if blob output fails
+      pdf.save(filename);
+      return;
+    }
+    setPdfPreview({
+      url: blobUrl,
+      filename,
+      title: doc.nom || "Rapport",
+      save: () => { pdf.save(filename); },
+    });
   }
+
+  React.useEffect(() => {
+    return () => {
+      // revoke object URL when modal closes / component unmounts
+      if (pdfPreview && pdfPreview.url) URL.revokeObjectURL(pdfPreview.url);
+    };
+  }, [pdfPreview && pdfPreview.url]);
 
   return (
     <div className="stack-lg fade-up">
@@ -3801,6 +3914,33 @@ function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* PDF preview modal */}
+      {pdfPreview && (
+        <div onClick={() => { if (pdfPreview.url) URL.revokeObjectURL(pdfPreview.url); setPdfPreview(null); }}
+             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "grid", placeItems: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()}
+               style={{ width: "min(960px, 100%)", height: "min(90vh, 1000px)", display: "flex", flexDirection: "column",
+                        background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14,
+                        boxShadow: "0 24px 60px rgba(0,0,0,0.55)" }}>
+            <div className="row between" style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>Aperçu PDF</div>
+                <div className="small muted">{pdfPreview.title}</div>
+              </div>
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn primary small" onClick={() => pdfPreview.save && pdfPreview.save()}>
+                  <Icon name="download" size={12}/> Télécharger
+                </button>
+                <button className="btn icon ghost" onClick={() => { if (pdfPreview.url) URL.revokeObjectURL(pdfPreview.url); setPdfPreview(null); }} title="Fermer">×</button>
+              </div>
+            </div>
+            <div style={{ flex: 1, background: "#222" }}>
+              <iframe src={pdfPreview.url} style={{ width: "100%", height: "100%", border: 0 }} title="Aperçu PDF"/>
+            </div>
           </div>
         </div>
       )}
