@@ -1370,14 +1370,29 @@ function EditableText({ value, tag = "span", className = "", style = {}, multili
     onCommit && onCommit(next);
   };
 
+  // Editing mode but not yet clicked: render as a lightweight decorated span.
+  // Switching contentEditable=true on hundreds of elements at once freezes the
+  // tab; we defer that to the element the user actually clicks on.
+  if (!active) {
+    return (
+      <Tag
+        className={className + " editable"}
+        style={style}
+        onMouseDown={(e) => { e.stopPropagation(); }}
+        onClick={(e) => { e.stopPropagation(); setActive(true); }}
+      >
+        {val || placeholder}
+      </Tag>
+    );
+  }
+
   return (
     <Tag
       ref={ref}
-      className={className + " editable" + (active ? " editing" : "")}
+      className={className + " editable editing"}
       style={style}
       contentEditable={true}
       suppressContentEditableWarning={true}
-      onFocus={() => setActive(true)}
       onBlur={commit}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -7660,6 +7675,7 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
 
   const meta = SCREEN_META[screen] || SCREEN_META.overview;
   const editing = isAdmin && editorOpen;
+  const editContextValue = React.useMemo(() => ({ editing }), [editing]);
 
   const refresh = React.useCallback(() => setRefreshKey(k => k + 1), []);
   const viewAsClient = React.useCallback((cid) => {
@@ -7899,7 +7915,7 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
               <button className="btn"><Icon name="download" size={13}/> Exporter</button>
             </div>
           </div>
-          <EditContext.Provider value={{ editing }}>
+          <EditContext.Provider value={editContextValue}>
             {renderScreen()}
           </EditContext.Provider>
         </div>
