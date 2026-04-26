@@ -4716,6 +4716,8 @@ window.DataEditDrawer = DataEditDrawer;
 function ScreenCustomers() {
   const [tab, setTab] = React.useState("leads");
   const [filter, setFilter] = React.useState("all");
+  const [statutFilter, setStatutFilter] = React.useState("all");
+  const [openLeadId, setOpenLeadId] = React.useState(null);
   const filteredCustomers = CUSTOMERS.filter(c => filter === "all" || c.status === filter);
 
   const sourceColors = {
@@ -4724,14 +4726,45 @@ function ScreenCustomers() {
     "Organique":  "oklch(0.78 0.13 155)",
     "Referral":   "oklch(0.70 0.12 240)",
   };
-  const statusLabel = {
-    new: { label: "Nouveau", color: "var(--info)" },
-    contacted: { label: "Contacté", color: "var(--accent-2)" },
-    qualified: { label: "Qualifié", color: "var(--success)" },
-    nurturing: { label: "Nurturing", color: "var(--text-3)" },
+  const sourceColorKey = (s) => {
+    const k = (s || "").toLowerCase();
+    if (k === "meta" || k === "meta ads") return sourceColors["Meta Ads"];
+    if (k === "google_ads") return sourceColors["Google Ads"];
+    if (k === "gmb" || k === "site") return sourceColors["Organique"];
+    if (k === "autre" || k === "referral") return sourceColors["Referral"];
+    return "var(--text-3)";
   };
+  const sourceLabelMap = { google_ads: "Google Ads", meta: "Meta Ads", gmb: "GMB", site: "Site", autre: "Referral", appel: "Appel", lsa: "LSA" };
 
-  const newToday = INBOUND_LEADS.filter(l => l.time.includes("min") || l.time.includes("4 min")).length;
+  const allLeads = window.__HELPAI_LEADS_ROWS || [];
+  const clients  = window.__HELPAI_CLIENTS_ROWS || [];
+  const clientNameOf = (id) => { const c = clients.find(x => x.id === id); return c ? c.nom : "—"; };
+
+  const filteredLeads = allLeads.filter(l => {
+    if (statutFilter === "all") return true;
+    return String(l.statut || "").toLowerCase() === statutFilter;
+  });
+
+  const STATUT_CHIPS = [
+    { id: "all",                     label: "Tous" },
+    { id: "nouveau",                 label: "Nouveau" },
+    { id: "qualification_en_cours",  label: "En qualif." },
+    { id: "qualifie",                label: "Qualifié" },
+    { id: "rdv_pris",                label: "RDV pris" },
+    { id: "devis_a_envoyer",         label: "Devis à faire" },
+    { id: "devis_envoye",            label: "Devis envoyé" },
+    { id: "devis_signe",             label: "Signé" },
+    { id: "no_show",                 label: "No-show" },
+    { id: "perdu",                   label: "Perdu" },
+  ];
+
+  const openedLead = openLeadId ? allLeads.find(l => l.id === openLeadId) : null;
+
+  const newToday = allLeads.filter(l => {
+    if (!l.created_at) return false;
+    const ageH = (Date.now() - new Date(l.created_at).getTime()) / 3600000;
+    return ageH < 24;
+  }).length;
 
   return (
     <div className="stack-lg fade-up">
@@ -4762,75 +4795,86 @@ function ScreenCustomers() {
           <div className="card">
             <div className="card-head">
               <div>
-                <EditableText value="Leads entrants tractés automatiquement" tag="div" className="card-title"/>
-                <EditableText value="UTM, source, landing et scoring capturés en temps réel via les automations" tag="div" className="card-sub"/>
+                <EditableText value="Leads entrants" tag="div" className="card-title"/>
+                <EditableText value="Qualification automatique par SMS, RDV, devis et chantiers — alimenté par les automations." tag="div" className="card-sub"/>
               </div>
               <span className="pill live"><span className="dot"/> <EditableText value="Tracking actif" tag="span"/></span>
             </div>
+
+            {/* Statut filter row */}
+            <div className="row" style={{ flexWrap: "wrap", gap: 6, padding: "8px 18px 12px", borderBottom: "1px solid var(--border-soft)" }}>
+              {STATUT_CHIPS.map(c => (
+                <button key={c.id}
+                        className={"chip " + (statutFilter === c.id ? "active" : "")}
+                        onClick={() => setStatutFilter(c.id)}>
+                  {c.label}
+                  {c.id !== "all" && (
+                    <span className="count">{allLeads.filter(l => String(l.statut || "").toLowerCase() === c.id).length}</span>
+                  )}
+                  {c.id === "all" && <span className="count">{allLeads.length}</span>}
+                </button>
+              ))}
+            </div>
+
             <table className="data">
               <thead>
                 <tr>
                   <EditableText value="Lead" tag="th"/>
                   <EditableText value="Source" tag="th"/>
-                  <EditableText value="Campagne / Landing" tag="th"/>
-                  <EditableText value="Score" tag="th"/>
+                  <EditableText value="Qualification" tag="th"/>
                   <EditableText value="Statut" tag="th"/>
-                  <EditableText value="Owner" tag="th"/>
-                  <EditableText value="Reçu" tag="th"/>
+                  <EditableText value="Client / Reçu" tag="th"/>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {INBOUND_LEADS.map((l, i) => (
-                  <tr key={i}>
-                    <td>
-                      <div className="row" style={{ gap: 10 }}>
-                        <span className={"av" + " av-colors-" + ((i % 4) + 1)} style={{ width: 28, height: 28, fontSize: 10 }}>
-                          {l.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                {filteredLeads.length === 0 && (
+                  <tr><td colSpan={6} className="muted small" style={{ textAlign: "center", padding: 24 }}>Aucun lead pour ce filtre.</td></tr>
+                )}
+                {filteredLeads.slice(0, 50).map((l, i) => {
+                  const srcLabel = sourceLabelMap[(l.source || "").toLowerCase()] || (l.source || "—");
+                  const initials = (l.nom || "??").split(/\s+/).filter(Boolean).map(x => x[0]).slice(0,2).join("").toUpperCase();
+                  return (
+                    <tr key={l.id || i} style={{ cursor: "pointer" }} onClick={() => setOpenLeadId(l.id)}>
+                      <td>
+                        <div className="row" style={{ gap: 10 }}>
+                          <span className={"av av-colors-" + ((i % 4) + 1)} style={{ width: 28, height: 28, fontSize: 10 }}>{initials}</span>
+                          <div>
+                            <strong style={{ fontSize: 12.5 }}>{l.nom || "Anonyme"}</strong>
+                            <div className="small muted">{l.email || l.telephone || "—"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="row" style={{ gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: sourceColorKey(l.source) }}/>
+                          <span style={{ fontSize: 12.5 }}>{srcLabel}</span>
                         </span>
-                        <div>
-                          <EditableText value={l.name} tag="strong" style={{ fontSize: 12.5 }}/>
-                          <EditableText value={l.company} tag="div" className="small muted"/>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="row" style={{ gap: 8 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: sourceColors[l.source] || "var(--text-3)" }}/>
-                        <EditableText value={l.source} tag="span" style={{ fontSize: 12.5 }}/>
-                      </span>
-                    </td>
-                    <td>
-                      <EditableText value={l.campaign} tag="div" style={{ fontSize: 12.5 }}/>
-                      <EditableText value={l.landing} tag="div" className="small muted mono"/>
-                    </td>
-                    <td>
-                      <div className="row" style={{ gap: 8 }}>
-                        <div className="progress" style={{ width: 50 }}>
-                          <div style={{
-                            width: l.score + "%", height: "100%", borderRadius: 99,
-                            background: l.score > 80 ? "var(--success)" : l.score > 60 ? "var(--accent)" : "var(--text-3)"
-                          }}/>
-                        </div>
-                        <span className="mono" style={{ fontWeight: 600, fontSize: 12 }}>{l.score}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="tag" style={{
-                        color: statusLabel[l.status].color,
-                        borderColor: statusLabel[l.status].color,
-                        background: "transparent"
-                      }}>{statusLabel[l.status].label}</span>
-                    </td>
-                    <td>
-                      {l.owner === "—"
-                        ? <span className="muted small">Non assigné</span>
-                        : <span className="av" style={{ width: 22, height: 22, fontSize: 9 }}>{l.owner}</span>}
-                    </td>
-                    <td className="muted small">{l.time}</td>
-                    <td><button className="btn icon ghost"><Icon name="more" size={14}/></button></td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>
+                        {l.qualifie ? (
+                          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                            {l.proprietaire === "proprietaire"
+                              ? <span className="tag success">🏠 Proprio</span>
+                              : l.proprietaire === "locataire"
+                                ? <span className="tag">🔑 Locataire</span>
+                                : null}
+                            {l.priorite === "haute" && <span className="tag danger">⚡ Prioritaire</span>}
+                            {l.urgence === "urgent" && <span className="tag danger">Urgent</span>}
+                            {l.urgence === "moyen" && <span className="tag accent">Moyen</span>}
+                            {l.prestation && <span className="small muted" style={{ fontStyle: "italic" }}>{l.prestation}</span>}
+                          </div>
+                        ) : <span className="small muted">Non qualifié</span>}
+                      </td>
+                      <td><HelpAiLeadStatutBadge statut={l.statut}/></td>
+                      <td>
+                        <div className="small">{clientNameOf(l.client_id)}</div>
+                        <div className="small muted">{timeAgo(l.created_at)}</div>
+                      </td>
+                      <td><button className="btn small" onClick={(e) => { e.stopPropagation(); setOpenLeadId(l.id); }}><Icon name="eye" size={12}/> Voir</button></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -4940,6 +4984,213 @@ function ScreenCustomers() {
           </table>
         </div>
       )}
+
+      {openedLead && (
+        <LeadDetailModal lead={openedLead} clientName={clientNameOf(openedLead.client_id)}
+                         onClose={() => setOpenLeadId(null)}
+                         onSaved={() => setOpenLeadId(null)}/>
+      )}
+    </div>
+  );
+}
+
+function LeadDetailModal({ lead, clientName, onClose, onSaved }) {
+  const [draft, setDraft] = React.useState({
+    statut: lead.statut || "nouveau",
+    qualifie: !!lead.qualifie,
+    proprietaire: lead.proprietaire || "",
+    prestation: lead.prestation || "",
+    urgence: lead.urgence || "",
+    priorite: lead.priorite || "",
+    rdv_datetime: lead.rdv_datetime ? String(lead.rdv_datetime).slice(0, 16) : "",
+    montant_chantier_eur: lead.montant_chantier ? Math.round(lead.montant_chantier / 100) : "",
+    notes_internes: lead.notes_internes || "",
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError]   = React.useState(null);
+  const [conv, setConv]     = React.useState([]);
+  const [convLoading, setConvLoading] = React.useState(false);
+
+  const showRdv     = String(draft.statut).indexOf("rdv") >= 0 || String(draft.statut) === "qualifie" || String(draft.statut) === "qualification_en_cours";
+  const showMontant = draft.statut === "devis_signe" || draft.statut === "chantier_termine" || draft.statut === "chantier_en_cours" || draft.statut === "gagne";
+
+  React.useEffect(() => {
+    setConvLoading(true);
+    sb.from("agency_lead_conversations")
+      .select("*")
+      .eq("lead_id", lead.id)
+      .order("created_at", { ascending: true })
+      .limit(200)
+      .then(({ data, error: err }) => {
+        setConvLoading(false);
+        if (!err) setConv(data || []);
+      });
+  }, [lead.id]);
+
+  async function save() {
+    setError(null);
+    setSaving(true);
+    const payload = {
+      statut: draft.statut || null,
+      qualifie: !!draft.qualifie,
+      proprietaire: draft.proprietaire || null,
+      prestation: (draft.prestation || "").trim() || null,
+      urgence: draft.urgence || null,
+      priorite: draft.priorite || null,
+      rdv_datetime: draft.rdv_datetime ? new Date(draft.rdv_datetime).toISOString() : null,
+      montant_chantier: draft.montant_chantier_eur ? (parseInt(draft.montant_chantier_eur, 10) * 100) : null,
+      notes_internes: (draft.notes_internes || "").trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { error: err } = await sb.from("agency_leads").update(payload).eq("id", lead.id);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    if (onSaved) onSaved();
+  }
+
+  function fmtMs(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString("fr-FR") + " " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "grid", placeItems: "center", padding: 24 }}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ width: "min(820px, 100%)", maxHeight: "92vh", display: "flex", flexDirection: "column",
+                    background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14,
+                    boxShadow: "0 24px 60px rgba(0,0,0,0.55)" }}>
+        <div className="row between" style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{lead.nom || "Lead anonyme"}</div>
+            <div className="small muted">{clientName} · {lead.email || lead.telephone || "—"} · reçu {timeAgo(lead.created_at)}</div>
+          </div>
+          <button className="btn icon ghost" onClick={onClose} title="Fermer">×</button>
+        </div>
+
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          {/* Qualification block */}
+          {(lead.qualifie || draft.qualifie) && (
+            <div className="card" style={{ padding: 14, marginBottom: 16, borderColor: "var(--accent-border)", background: "var(--accent-soft)" }}>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                {draft.proprietaire === "proprietaire" && <span className="tag success">🏠 Propriétaire</span>}
+                {draft.proprietaire === "locataire" && <span className="tag">🔑 Locataire</span>}
+                {draft.urgence === "urgent" && <span className="tag danger">Urgent</span>}
+                {draft.urgence === "moyen" && <span className="tag accent">Délai moyen</span>}
+                {draft.urgence === "futur" && <span className="tag">Futur projet</span>}
+                {draft.priorite === "haute" && <span className="tag danger">⚡ PRIORITAIRE</span>}
+              </div>
+              {draft.prestation && <div className="small" style={{ marginBottom: 6 }}><strong>Prestation :</strong> {draft.prestation}</div>}
+              {lead.message && <div className="small muted" style={{ fontStyle: "italic" }}>"{lead.message}"</div>}
+            </div>
+          )}
+
+          {/* Edit fields */}
+          <div className="grid g-2" style={{ gap: 12 }}>
+            <_AdminField label="Statut">
+              <select className="search" style={{ width: "100%", minWidth: 0, cursor: "pointer", color: "var(--text-1)" }}
+                      value={draft.statut} onChange={e => setDraft({ ...draft, statut: e.target.value })}>
+                {HELPAI_LEAD_STATUT_OPTIONS.map(s => (<option key={s} value={s}>{HELPAI_LEAD_STATUTS[s] && HELPAI_LEAD_STATUTS[s].label || s}</option>))}
+              </select>
+            </_AdminField>
+            <_AdminField label="Qualifié">
+              <label className="row" style={{ gap: 8, padding: "6px 0" }}>
+                <input type="checkbox" checked={!!draft.qualifie} onChange={e => setDraft({ ...draft, qualifie: e.target.checked })}/>
+                <span className="small">{draft.qualifie ? "Oui — qualification réalisée" : "Pas encore qualifié"}</span>
+              </label>
+            </_AdminField>
+            <_AdminField label="Propriétaire / Locataire">
+              <select className="search" style={{ width: "100%", minWidth: 0, cursor: "pointer", color: "var(--text-1)" }}
+                      value={draft.proprietaire} onChange={e => setDraft({ ...draft, proprietaire: e.target.value })}>
+                <option value="">—</option>
+                <option value="proprietaire">Propriétaire</option>
+                <option value="locataire">Locataire</option>
+              </select>
+            </_AdminField>
+            <_AdminField label="Urgence">
+              <select className="search" style={{ width: "100%", minWidth: 0, cursor: "pointer", color: "var(--text-1)" }}
+                      value={draft.urgence} onChange={e => setDraft({ ...draft, urgence: e.target.value })}>
+                <option value="">—</option>
+                <option value="urgent">Urgent</option>
+                <option value="moyen">Délai moyen</option>
+                <option value="futur">Futur projet</option>
+              </select>
+            </_AdminField>
+            <_AdminField label="Priorité">
+              <select className="search" style={{ width: "100%", minWidth: 0, cursor: "pointer", color: "var(--text-1)" }}
+                      value={draft.priorite} onChange={e => setDraft({ ...draft, priorite: e.target.value })}>
+                <option value="">—</option>
+                <option value="haute">Haute</option>
+                <option value="normale">Normale</option>
+                <option value="basse">Basse</option>
+              </select>
+            </_AdminField>
+            <_AdminField label="Prestation demandée">
+              <input className="search" style={{ width: "100%", minWidth: 0, cursor: "text", color: "var(--text-1)" }}
+                     placeholder="ex: Rénovation toiture 80m²"
+                     value={draft.prestation} onChange={e => setDraft({ ...draft, prestation: e.target.value })}/>
+            </_AdminField>
+            {showRdv && (
+              <_AdminField label="Date du RDV" hint="Visible quand statut = qualifié ou contient 'rdv'">
+                <input className="search" type="datetime-local" style={{ width: "100%", minWidth: 0, cursor: "text", color: "var(--text-1)" }}
+                       value={draft.rdv_datetime} onChange={e => setDraft({ ...draft, rdv_datetime: e.target.value })}/>
+              </_AdminField>
+            )}
+            {showMontant && (
+              <_AdminField label="Montant du chantier (€)" hint="Stocké en centimes en base — saisis ici en euros">
+                <input className="search" type="number" min="0" step="1" placeholder="3500"
+                       style={{ width: "100%", minWidth: 0, cursor: "text", color: "var(--text-1)" }}
+                       value={draft.montant_chantier_eur}
+                       onChange={e => setDraft({ ...draft, montant_chantier_eur: e.target.value })}/>
+              </_AdminField>
+            )}
+          </div>
+
+          <div className="stack-xs" style={{ marginTop: 14 }}>
+            <label className="small muted">Notes internes</label>
+            <textarea className="search" rows={3}
+                      style={{ width: "100%", minWidth: 0, height: "auto", padding: "8px 10px", resize: "vertical", cursor: "text", color: "var(--text-1)", fontFamily: "inherit", lineHeight: 1.5 }}
+                      value={draft.notes_internes}
+                      onChange={e => setDraft({ ...draft, notes_internes: e.target.value })}/>
+          </div>
+
+          {error && <div className="small" style={{ color: "var(--danger)", marginTop: 10 }}>{error}</div>}
+
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+            <button className="btn" onClick={onClose} disabled={saving}>Annuler</button>
+            <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</button>
+          </div>
+
+          {/* Conversation history */}
+          <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--border-soft)" }}>
+            <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 10 }}>
+              Historique SMS / WhatsApp · {conv.length}
+            </div>
+            {convLoading && <div className="muted small" style={{ textAlign: "center", padding: 12 }}>Chargement…</div>}
+            {!convLoading && conv.length === 0 && <div className="muted small" style={{ textAlign: "center", padding: 12 }}>Aucun message échangé pour ce lead.</div>}
+            <div className="stack-sm">
+              {conv.map(c => {
+                const inbound = c.direction === "inbound" || c.direction === "in";
+                return (
+                  <div key={c.id} style={{ display: "flex", flexDirection: inbound ? "row" : "row-reverse" }}>
+                    <div style={{ maxWidth: "78%", padding: "10px 12px", borderRadius: 10,
+                                  background: inbound ? "var(--surface-2)" : "var(--accent-soft)",
+                                  border: "1px solid " + (inbound ? "var(--border-soft)" : "var(--accent-border)") }}>
+                      <div className="row between" style={{ marginBottom: 4, gap: 12 }}>
+                        <span className="small muted" style={{ fontSize: 10.5, fontWeight: 600 }}>
+                          {inbound ? "▼" : "▲"} {c.de || (inbound ? "Prospect" : "Système")}
+                        </span>
+                        <span className="mono small muted" style={{ fontSize: 10 }}>{fmtMs(c.created_at)}</span>
+                      </div>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{c.contenu || "—"}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -4947,6 +5198,7 @@ function ScreenCustomers() {
 window.ScreenPipeline = ScreenPipeline;
 window.ScreenSales = ScreenSales;
 window.ScreenCustomers = ScreenCustomers;
+window.LeadDetailModal = LeadDetailModal;
 
   </script>
 
