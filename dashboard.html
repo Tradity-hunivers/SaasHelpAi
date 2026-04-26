@@ -6165,6 +6165,479 @@ function ScreenSiteWeb() {
 
 window.ScreenSiteWeb = ScreenSiteWeb;
 
+/* ============ Automations Journal (admin) ============ */
+function ScreenAutomationsJournal() {
+  const clients = window.__HELPAI_CLIENTS_ROWS || [];
+  const [filterClient, setFilterClient] = React.useState("all");
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    setLoading(true);
+    let q = sb.from("agency_automation_log").select("*").order("created_at", { ascending: false }).limit(200);
+    if (filterClient !== "all") q = q.eq("client_id", filterClient);
+    q.then(({ data, error }) => { setLoading(false); if (!error) setRows(data || []); });
+  }, [filterClient]);
+
+  function automationLabel(t) {
+    const map = {
+      sms_qual_1: "Qualification SMS envoyée",
+      sms_qual_2: "Relance qualification",
+      sms_rdv_rappel: "Rappel RDV envoyé",
+      sms_devis_relance: "Relance devis envoyée",
+      sms_avis_demande: "Demande d'avis envoyée",
+      lead_assignation: "Lead assigné à l'artisan",
+      bilan_mensuel: "Bilan mensuel envoyé",
+      whatsapp_envoye: "Notification WhatsApp",
+      telegram_envoye: "Notification Telegram",
+      rdv_pris: "RDV pris",
+      no_show_detect: "No-show détecté",
+    };
+    return map[t] || (t || "—").replace(/_/g, " ");
+  }
+  const clientName = (id) => { const c = clients.find(x => x.id === id); return c ? c.nom : "—"; };
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="automations" size={10}/> <EditableText value="Automations" storageKey="aj.hero.tag" tag="span"/></span>
+            <span className="pill live"><span className="dot"/> <EditableText value="Live" storageKey="aj.hero.live" tag="span"/></span>
+          </div>
+          <EditableText storageKey="aj.hero.title" value="Journal des actions automatiques" tag="div" className="hp-title" multiline/>
+          <EditableText storageKey="aj.hero.sub" value="Toutes les actions du système — SMS prospects, notifications artisan, rappels, bilans — sur tous les clients de l'agence." tag="div" className="hp-sub" multiline/>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <EditableText value="Dernières automations" storageKey="aj.tbl.title" tag="div" className="card-title"/>
+            <EditableText value="200 dernières actions, triées par date décroissante" storageKey="aj.tbl.sub" tag="div" className="card-sub"/>
+          </div>
+          <select className="search" style={{ minWidth: 220, color: "var(--text-1)", cursor: "pointer" }}
+                  value={filterClient} onChange={e => setFilterClient(e.target.value)}>
+            <option value="all">Tous les clients</option>
+            {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+          </select>
+        </div>
+        <table className="data">
+          <thead>
+            <tr>
+              <EditableText tag="th" value="Date"/>
+              <EditableText tag="th" value="Client"/>
+              <EditableText tag="th" value="Action"/>
+              <EditableText tag="th" value="Cible"/>
+              <EditableText tag="th" value="Statut"/>
+              <EditableText tag="th" value="Détail"/>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td colSpan={6} className="muted small" style={{ textAlign: "center", padding: 20 }}>Chargement…</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan={6} className="muted small" style={{ textAlign: "center", padding: 24 }}>Aucune automation.</td></tr>}
+            {rows.map(r => (
+              <tr key={r.id}>
+                <td className="mono small muted">{r.created_at ? new Date(r.created_at).toLocaleString("fr-FR") : "—"}</td>
+                <td><strong>{clientName(r.client_id)}</strong></td>
+                <td>{automationLabel(r.type)}</td>
+                <td className="small">
+                  {r.cible === "prospect" ? <span className="tag accent">→ Prospect</span> : r.cible === "artisan" ? <span className="tag success">→ Artisan</span> : <span className="muted">{r.cible || "—"}</span>}
+                </td>
+                <td className="small">
+                  {r.statut === "ok" || r.statut === "envoye" ? <span style={{ color: "var(--success)" }}>{r.statut}</span>
+                    : r.statut === "echec" ? <span style={{ color: "var(--danger)" }}>{r.statut}</span>
+                    : <span className="muted">{r.statut || "—"}</span>}
+                </td>
+                <td className="small muted">{r.detail || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+window.ScreenAutomationsJournal = ScreenAutomationsJournal;
+
+/* ============ Mon site (client) ============ */
+function ScreenMonSite() {
+  const clients = window.__HELPAI_CLIENTS_ROWS || [];
+  const me = clients.length === 1 ? clients[0] : null;
+  const [caRows, setCaRows] = React.useState([]);
+  const [gaRow,  setGaRow]  = React.useState(null);
+  const [gaPeriod, setGaPeriod] = React.useState("30");
+  const [posts, setPosts] = React.useState([]);
+
+  React.useEffect(() => {
+    if (!me) return;
+    sb.from("agency_ca_mensuel").select("*").eq("client_id", me.id).order("mois", { ascending: false }).limit(6).then(({ data }) => setCaRows(data || []));
+    sb.from("agency_blog_posts").select("*").eq("client_id", me.id).eq("statut", "published").order("publie_le", { ascending: false }).limit(20).then(({ data }) => setPosts(data || []));
+    sb.from("agency_ga_stats").select("*").eq("client_id", me.id).order("synced_at", { ascending: false }).limit(1).maybeSingle().then(({ data }) => setGaRow(data || null));
+  }, [me && me.id, gaPeriod]);
+
+  if (!me) {
+    return <div className="stack-lg fade-up"><div className="card muted small" style={{ padding: 32, textAlign: "center" }}>Cet écran n'est dispo qu'en vue client (un seul client scopé).</div></div>;
+  }
+
+  const cur = caRows[0] || {};
+  const total6m = caRows.reduce((s, r) => s + (Number(r.ca_total) || 0), 0);
+  const maxCA = Math.max(1, ...caRows.map(r => Number(r.ca_total) || 0));
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="globe" size={10}/> <EditableText value="Mon site" storageKey="ms.hero.tag" tag="span"/></span>
+          </div>
+          <EditableText storageKey="ms.hero.title" value="Performance de votre site" tag="div" className="hp-title" multiline/>
+          <EditableText storageKey="ms.hero.sub" value="Suivi du chiffre d'affaires généré, du trafic Google Analytics et des articles de blog publiés." tag="div" className="hp-sub" multiline/>
+        </div>
+      </div>
+
+      {/* CA Mensuel */}
+      <div className="card">
+        <div className="card-head">
+          <EditableText value="💶 Chiffre d'affaires" storageKey="ms.ca.title" tag="div" className="card-title"/>
+          <EditableText value="Évolution sur 6 mois" storageKey="ms.ca.sub" tag="div" className="card-sub"/>
+        </div>
+        <div className="card-body">
+          <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+            <div className="kpi"><div className="kpi-label"><span>CA ce mois</span>{cur.ca_delta_pct != null && <span className={"trend " + (Number(cur.ca_delta_pct) >= 0 ? "up" : "down")}>{(Number(cur.ca_delta_pct) >= 0 ? "+" : "") + Number(cur.ca_delta_pct).toFixed(1) + "%"}</span>}</div><div className="kpi-value"><span className="mono">{Math.round((cur.ca_total||0)/100).toLocaleString("fr-FR")}</span><span className="unit">€</span></div></div>
+            <div className="kpi"><div className="kpi-label"><span>Chantiers</span></div><div className="kpi-value"><span className="mono">{cur.nb_chantiers || 0}</span></div></div>
+            <div className="kpi"><div className="kpi-label"><span>Panier moyen</span></div><div className="kpi-value"><span className="mono">{Math.round((cur.panier_moyen||0)/100).toLocaleString("fr-FR")}</span><span className="unit">€</span></div></div>
+          </div>
+          {caRows.length > 0 && (
+            <div style={{ marginTop: 14, padding: 14, border: "1px solid var(--border-soft)", borderRadius: 10, background: "var(--bg-2)" }}>
+              <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>CA total · 6 derniers mois</div>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 120 }}>
+                {caRows.slice().reverse().map((r, i) => {
+                  const h = ((Number(r.ca_total) || 0) / maxCA) * 100;
+                  return (
+                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                      <span className="mono small muted" style={{ fontSize: 10 }}>{Math.round((r.ca_total||0)/100).toLocaleString("fr-FR")}</span>
+                      <div style={{ width: "100%", flex: 1, display: "flex", alignItems: "flex-end" }}>
+                        <div style={{ width: "100%", height: h + "%", background: "linear-gradient(180deg, var(--accent), var(--accent-2))", borderRadius: 4, minHeight: 2 }}/>
+                      </div>
+                      <div className="small muted" style={{ fontSize: 10 }}>{r.mois ? new Date(r.mois).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) : "—"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* GA stats */}
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <EditableText value="📊 Google Analytics" storageKey="ms.ga.title" tag="div" className="card-title"/>
+            <EditableText value="Trafic, sources et pages les plus visitées" storageKey="ms.ga.sub" tag="div" className="card-sub"/>
+          </div>
+          <div className="seg" style={{ width: 220 }}>
+            <button className={gaPeriod === "7" ? "active" : ""} onClick={() => setGaPeriod("7")}>7j</button>
+            <button className={gaPeriod === "30" ? "active" : ""} onClick={() => setGaPeriod("30")}>30j</button>
+            <button className={gaPeriod === "90" ? "active" : ""} onClick={() => setGaPeriod("90")}>90j</button>
+          </div>
+        </div>
+        <div className="card-body">
+          {!gaRow && <div className="muted small" style={{ padding: 16, textAlign: "center" }}>Aucune donnée GA synchronisée pour ce client. Connecte Google Analytics depuis Admin → Clients.</div>}
+          {gaRow && (
+            <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+              <div className="kpi"><div className="kpi-label"><span>Sessions</span>{gaRow.sessions_delta != null && <span className={"trend " + (Number(gaRow.sessions_delta) >= 0 ? "up" : "down")}>{(Number(gaRow.sessions_delta) >= 0 ? "+" : "") + Number(gaRow.sessions_delta).toFixed(1) + "%"}</span>}</div><div className="kpi-value"><span className="mono">{Number(gaRow.sessions || 0).toLocaleString("fr-FR")}</span></div></div>
+              <div className="kpi"><div className="kpi-label"><span>Utilisateurs</span></div><div className="kpi-value"><span className="mono">{Number(gaRow.utilisateurs || 0).toLocaleString("fr-FR")}</span></div></div>
+              <div className="kpi"><div className="kpi-label"><span>Pages vues</span></div><div className="kpi-value"><span className="mono">{Number(gaRow.pages_vues || 0).toLocaleString("fr-FR")}</span></div></div>
+              <div className="kpi"><div className="kpi-label"><span>Conversions</span></div><div className="kpi-value"><span className="mono">{Number(gaRow.conversions || 0).toLocaleString("fr-FR")}</span></div></div>
+              <div className="kpi"><div className="kpi-label"><span>Taux de rebond</span></div><div className="kpi-value"><span className="mono">{((Number(gaRow.taux_rebond) || 0) * 100).toFixed(1)}</span><span className="unit">%</span></div></div>
+              <div className="kpi"><div className="kpi-label"><span>Durée moy.</span></div><div className="kpi-value"><span className="mono">{Math.round((Number(gaRow.duree_session_moy) || 0) / 60)}</span><span className="unit">min</span></div></div>
+              <div className="kpi"><div className="kpi-label"><span>Mobile</span></div><div className="kpi-value"><span className="mono">{Number(gaRow.mobile_pct || 0).toFixed(0)}</span><span className="unit">%</span></div></div>
+              <div className="kpi"><div className="kpi-label"><span>Desktop</span></div><div className="kpi-value"><span className="mono">{Number(gaRow.desktop_pct || 0).toFixed(0)}</span><span className="unit">%</span></div></div>
+            </div>
+          )}
+          {gaRow && Array.isArray(gaRow.top_pages) && gaRow.top_pages.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 8 }}>Top pages</div>
+              <div className="stack-sm">
+                {gaRow.top_pages.slice(0, 8).map((p, i) => (
+                  <div key={i} className="row between" style={{ padding: 8, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <span className="mono small">{p.page || p.path || "—"}</span>
+                    <span className="mono small muted">{(p.vues || p.views || p.pageviews || 0).toLocaleString("fr-FR")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {gaRow && Array.isArray(gaRow.sources) && gaRow.sources.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 8 }}>Sources de trafic</div>
+              <div className="stack-sm">
+                {gaRow.sources.slice(0, 8).map((s, i) => (
+                  <div key={i} className="row between" style={{ padding: 8, background: "var(--bg-2)", borderRadius: 8 }}>
+                    <span className="small">{s.source || s.name || "—"}</span>
+                    <span className="mono small muted">{(s.sessions || s.value || 0).toLocaleString("fr-FR")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Articles de blog */}
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <EditableText value="📝 Articles de blog publiés" storageKey="ms.blog.title" tag="div" className="card-title"/>
+            <EditableText value="Articles SEO générés et publiés sur votre site" storageKey="ms.blog.sub" tag="div" className="card-sub"/>
+          </div>
+        </div>
+        <div className="card-body">
+          {posts.length === 0 && <div className="muted small" style={{ textAlign: "center", padding: 16 }}>Aucun article publié pour l'instant.</div>}
+          {posts.length > 0 && (
+            <div className="stack-sm">
+              {posts.map(p => (
+                <div key={p.id} className="row between" style={{ padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{p.titre}</div>
+                    <div className="small muted">
+                      {p.mot_cle_principal && <>Mot-clé : <strong>{p.mot_cle_principal}</strong> · </>}
+                      {p.nb_mots ? p.nb_mots + " mots" : ""}
+                      {p.publie_le && " · " + new Date(p.publie_le).toLocaleDateString("fr-FR")}
+                    </div>
+                  </div>
+                  {p.url_publique && (
+                    <a href={p.url_publique} target="_blank" rel="noopener noreferrer" className="btn small">
+                      <Icon name="external" size={12}/> Lire
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.ScreenMonSite = ScreenMonSite;
+
+/* ============ Suivi (client SMS history) ============ */
+function ScreenSuivi() {
+  const clients = window.__HELPAI_CLIENTS_ROWS || [];
+  const me = clients.length === 1 ? clients[0] : null;
+  const [rows, setRows] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!me) return;
+    setLoading(true);
+    sb.from("agency_lead_conversations").select("*, agency_leads(nom, statut)")
+      .eq("client_id", me.id)
+      .order("created_at", { ascending: false }).limit(300)
+      .then(({ data, error }) => { setLoading(false); if (!error) setRows(data || []); });
+  }, [me && me.id]);
+
+  if (!me) {
+    return <div className="stack-lg fade-up"><div className="card muted small" style={{ padding: 32, textAlign: "center" }}>Cet écran est réservé à la vue client.</div></div>;
+  }
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="inbox" size={10}/> <EditableText value="Suivi" storageKey="suivi.hero.tag" tag="span"/></span>
+            <span className="pill live"><span className="dot"/> <EditableText value="100% automatisé" storageKey="suivi.hero.live" tag="span"/></span>
+          </div>
+          <EditableText storageKey="suivi.hero.title" value="Tout ce que le système a fait pour vous" tag="div" className="hp-title" multiline/>
+          <EditableText storageKey="suivi.hero.sub" value="Chaque message envoyé ou reçu — qualification, rappels RDV, relances devis, demandes d'avis. Vous n'avez rien eu à faire." tag="div" className="hp-sub" multiline/>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <EditableText value="Historique des messages" storageKey="suivi.tbl.title" tag="div" className="card-title"/>
+          <span className="small muted">{rows.length} messages</span>
+        </div>
+        <div className="card-body" style={{ padding: 0, maxHeight: 720, overflow: "auto" }}>
+          {loading && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Chargement…</div>}
+          {!loading && rows.length === 0 && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Aucun message échangé pour l'instant.</div>}
+          {rows.map(r => {
+            const inbound = r.direction === "inbound" || r.direction === "in";
+            const lead = r.agency_leads || {};
+            return (
+              <div key={r.id} style={{ padding: "12px 18px", borderBottom: "1px solid var(--border-soft)" }}>
+                <div className="row between" style={{ marginBottom: 4 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <span className="small" style={{ fontWeight: 600 }}>{inbound ? "▼ Reçu" : "▲ Envoyé"}</span>
+                    {lead.nom && <span className="small muted">· Lead : <strong style={{ color: "var(--text-2)" }}>{lead.nom}</strong></span>}
+                    {r.de && <span className="small muted">· De : {r.de}</span>}
+                    {r.phone && <span className="mono small muted">{r.phone}</span>}
+                  </div>
+                  <span className="mono small muted">{r.created_at ? new Date(r.created_at).toLocaleString("fr-FR") : "—"}</span>
+                </div>
+                <div className="small" style={{ color: "var(--text-2)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{r.contenu || "—"}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.ScreenSuivi = ScreenSuivi;
+
+/* ============ Blog IA (admin) ============ */
+function ScreenBlogAdmin({ onRefresh }) {
+  const clients = window.__HELPAI_CLIENTS_ROWS || [];
+  const [selectedId, setSelectedId] = React.useState(clients[0] ? clients[0].id : null);
+  const [site, setSite]       = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [feedback, setFeedback] = React.useState(null);
+  const [posts, setPosts]     = React.useState([]);
+
+  const selected = clients.find(c => c.id === selectedId) || null;
+
+  React.useEffect(() => {
+    if (!selected) { setSite(null); setPosts([]); return; }
+    setLoading(true);
+    sb.from("agency_sites").select("*").eq("client_id", selected.id).maybeSingle().then(({ data }) => {
+      setLoading(false);
+      setSite(data || { client_id: selected.id, github_branch: "main", blog_folder: "content/blog/", blog_actif: false, ga4_actif: false, frequence: "1_par_semaine" });
+    });
+    sb.from("agency_blog_posts").select("*").eq("client_id", selected.id).order("created_at", { ascending: false }).limit(20).then(({ data }) => setPosts(data || []));
+  }, [selectedId]);
+
+  function setField(k, v) { setSite({ ...(site || {}), [k]: v }); }
+
+  async function saveSite() {
+    if (!site || !selected) return;
+    setFeedback(null);
+    const payload = { ...site, client_id: selected.id, updated_at: new Date().toISOString() };
+    delete payload.id;
+    delete payload.created_at;
+    const exRes = await sb.from("agency_sites").select("id").eq("client_id", selected.id).maybeSingle();
+    let res;
+    if (exRes.data && exRes.data.id) {
+      res = await sb.from("agency_sites").update(payload).eq("id", exRes.data.id);
+    } else {
+      res = await sb.from("agency_sites").insert(payload);
+    }
+    if (res.error) { setFeedback({ type: "error", msg: res.error.message }); return; }
+    setFeedback({ type: "ok", msg: "Configuration enregistrée." });
+  }
+
+  async function generate() {
+    if (!selected) return;
+    setFeedback({ type: "ok", msg: "Génération en cours via DeepSeek…" });
+    try {
+      const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/blog-generate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agencyClientId: selected.id }),
+      });
+      const j = await r.json();
+      if (!r.ok || j.error) { setFeedback({ type: "error", msg: "Génération échouée : " + (j.message || j.error || r.status) }); return; }
+      setFeedback({ type: "ok", msg: "Article généré : « " + (j.post && j.post.titre) + " »." });
+      sb.from("agency_blog_posts").select("*").eq("client_id", selected.id).order("created_at", { ascending: false }).limit(20).then(({ data }) => setPosts(data || []));
+      if (onRefresh) onRefresh();
+    } catch (e) { setFeedback({ type: "error", msg: String(e) }); }
+  }
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="edit" size={10}/> <EditableText value="Blog IA" storageKey="ba.hero.tag" tag="span"/></span>
+          </div>
+          <EditableText storageKey="ba.hero.title" value="Configuration & génération d'articles" tag="div" className="hp-title" multiline/>
+          <EditableText storageKey="ba.hero.sub" value="Configure le blog auto par client (repo GitHub, ton, mots-clés) et génère des articles à la demande via DeepSeek." tag="div" className="hp-sub" multiline/>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <EditableText value="Sélection client" storageKey="ba.sel.title" tag="div" className="card-title"/>
+          <select className="search" style={{ minWidth: 260, color: "var(--text-1)", cursor: "pointer" }}
+                  value={selectedId || ""} onChange={e => setSelectedId(e.target.value)}>
+            {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+          </select>
+        </div>
+
+        {feedback && <div className="small" style={{ padding: "8px 18px", color: feedback.type === "error" ? "var(--danger)" : "var(--success)" }}>{feedback.msg}</div>}
+
+        {loading && <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Chargement…</div>}
+
+        {!loading && site && (
+          <div className="card-body grid g-2" style={{ gap: 12 }}>
+            <_AdminField label="URL du site"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} value={site.site_url || ""} onChange={e => setField("site_url", e.target.value)}/></_AdminField>
+            <_AdminField label="Nom du site"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} value={site.site_nom || ""} onChange={e => setField("site_nom", e.target.value)}/></_AdminField>
+            <_AdminField label="Repo GitHub (owner/repo)"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="owner/repo" value={site.github_repo || ""} onChange={e => setField("github_repo", e.target.value)}/></_AdminField>
+            <_AdminField label="Token GitHub" hint="Stocké chiffré côté serveur. Laisse vide pour réutiliser le token existant."><input className="search" type="password" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="ghp_…" value={site.github_token || ""} onChange={e => setField("github_token", e.target.value)}/></_AdminField>
+            <_AdminField label="Branche GitHub"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="main" value={site.github_branch || "main"} onChange={e => setField("github_branch", e.target.value)}/></_AdminField>
+            <_AdminField label="Dossier blog"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="content/blog/" value={site.blog_folder || "content/blog/"} onChange={e => setField("blog_folder", e.target.value)}/></_AdminField>
+            <_AdminField label="Secteur"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} value={site.secteur || ""} onChange={e => setField("secteur", e.target.value)}/></_AdminField>
+            <_AdminField label="Ville"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} value={site.ville || ""} onChange={e => setField("ville", e.target.value)}/></_AdminField>
+            <_AdminField label="Zone géographique"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} value={site.zone_geo || ""} onChange={e => setField("zone_geo", e.target.value)}/></_AdminField>
+            <_AdminField label="Ton éditorial"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="professionnel et accessible" value={site.ton_editorial || ""} onChange={e => setField("ton_editorial", e.target.value)}/></_AdminField>
+            <_AdminField label="Services (séparés par virgules)"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="Création site, SEO local, Google Ads…" value={(site.services || []).join(", ")} onChange={e => setField("services", e.target.value.split(",").map(s => s.trim()).filter(Boolean))}/></_AdminField>
+            <_AdminField label="Mots-clés SEO (séparés par virgules)"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} value={(site.mots_cles || []).join(", ")} onChange={e => setField("mots_cles", e.target.value.split(",").map(s => s.trim()).filter(Boolean))}/></_AdminField>
+            <_AdminField label="Fréquence de publication"><select className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "pointer" }} value={site.frequence || "1_par_semaine"} onChange={e => setField("frequence", e.target.value)}><option value="1_par_semaine">1 par semaine</option><option value="2_par_semaine">2 par semaine</option><option value="1_par_2_semaines">1 toutes les 2 semaines</option><option value="1_par_mois">1 par mois</option></select></_AdminField>
+            <_AdminField label="URL d'avis Google"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="https://g.page/r/…" value={site.avis_google_url || ""} onChange={e => setField("avis_google_url", e.target.value)}/></_AdminField>
+            <_AdminField label="GA4 Property ID"><input className="search" style={{ width: "100%", minWidth: 0, color: "var(--text-1)", cursor: "text" }} placeholder="properties/123456789" value={site.ga4_property_id || ""} onChange={e => setField("ga4_property_id", e.target.value)}/></_AdminField>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="row" style={{ gap: 8, cursor: "pointer", marginBottom: 6 }}><input type="checkbox" checked={!!site.blog_actif} onChange={e => setField("blog_actif", e.target.checked)}/><span className="small">Blog automatique activé (publication selon la fréquence)</span></label>
+              <label className="row" style={{ gap: 8, cursor: "pointer" }}><input type="checkbox" checked={!!site.ga4_actif} onChange={e => setField("ga4_actif", e.target.checked)}/><span className="small">Sync Google Analytics activée</span></label>
+            </div>
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end", gridColumn: "1 / -1" }}>
+              <button className="btn primary" onClick={generate}><Icon name="sparkles" size={13}/> Générer maintenant</button>
+              <button className="btn" onClick={saveSite}>Enregistrer la configuration</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <EditableText value="Articles déjà générés" storageKey="ba.posts.title" tag="div" className="card-title"/>
+          <span className="small muted">{posts.length} articles</span>
+        </div>
+        <table className="data">
+          <thead>
+            <tr>
+              <EditableText tag="th" value="Titre"/>
+              <EditableText tag="th" value="Statut"/>
+              <EditableText tag="th" value="Mots"/>
+              <EditableText tag="th" value="Date"/>
+              <EditableText tag="th" value="Lien"/>
+            </tr>
+          </thead>
+          <tbody>
+            {posts.length === 0 && <tr><td colSpan={5} className="muted small" style={{ textAlign: "center", padding: 20 }}>Aucun article pour ce client.</td></tr>}
+            {posts.map(p => (
+              <tr key={p.id}>
+                <td><strong>{p.titre}</strong>{p.mot_cle_principal && <div className="small muted">{p.mot_cle_principal}</div>}</td>
+                <td><span className={"tag " + (p.statut === "published" ? "success" : p.statut === "failed" ? "danger" : "")}>{p.statut}</span></td>
+                <td className="mono">{p.nb_mots || 0}</td>
+                <td className="muted small">{p.created_at ? new Date(p.created_at).toLocaleDateString("fr-FR") : "—"}</td>
+                <td>{p.url_publique ? <a href={p.url_publique} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Lire</a> : <span className="muted small">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+window.ScreenBlogAdmin = ScreenBlogAdmin;
+
 function ScreenAutomations() {
   const STORAGE_KEY = "helpai_workflows";
   const [tab, setTab] = React.useState("all");
@@ -7096,10 +7569,16 @@ function buildNav(isAdmin) {
     ]},
   ];
   if (isAdmin) {
-    nav[1].items.push({ id: "automations", label: "Automations", icon: "automations" });
+    nav[0].items.push({ id: "automations_journal", label: "Automations", icon: "automations" });
+    nav[1].items.push({ id: "automations", label: "Workflows", icon: "automations" });
     nav.push({ group: "Admin", items: [
       { id: "clients", label: "Clients", icon: "customers" },
+      { id: "blog_admin", label: "Blog IA", icon: "edit" },
     ]});
+  } else {
+    // Client-only nav additions
+    nav[3].items.push({ id: "mon_site", label: "Mon site", icon: "globe" });
+    nav[3].items.push({ id: "suivi",    label: "Suivi",    icon: "inbox" });
   }
   return nav;
 }
@@ -7111,6 +7590,10 @@ const SCREEN_META = {
   ai:           { title: "Activité IA",    sub: "Actions réalisées et planifiées par l'agent IA", breadcrumb: "Intelligence" },
   ads:          { title: "Ads",            sub: "Google Ads, Meta Ads & Local Services — performance live", breadcrumb: "Écosystème" },
   siteweb:      { title: "Site web",       sub: "Trafic Google Analytics & sources UTM (formulaire / tel)", breadcrumb: "Écosystème" },
+  automations_journal: { title: "Automations", sub: "Journal des actions automatiques tous clients (live)", breadcrumb: "Tableau de bord" },
+  blog_admin:   { title: "Blog IA",        sub: "Configuration du blog auto par client + génération manuelle", breadcrumb: "Admin" },
+  mon_site:     { title: "Mon site",       sub: "CA mensuel · Google Analytics · Articles de blog publiés", breadcrumb: "Écosystème" },
+  suivi:        { title: "Suivi",          sub: "Historique complet des messages échangés pour vos leads", breadcrumb: "Écosystème" },
   automations:  { title: "Automations",    sub: "Workflows et déclencheurs",               breadcrumb: "Intelligence" },
   customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
   gmb:          { title: "Google Business", sub: "Activité live · posts, avis, rapports — alimenté par le bot Telegram", breadcrumb: "Écosystème" },
@@ -7302,6 +7785,10 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
       case "siteweb":     return <ScreenSiteWeb/>;
       case "architecture":return <ScreenArchitecture/>;
       case "clients":     return isAdmin ? <ScreenClientsAdmin onViewClient={viewAsClient} onRefresh={refresh} tick={tick}/> : <ScreenOverview/>;
+      case "automations_journal": return isAdmin ? <ScreenAutomationsJournal/> : <ScreenOverview/>;
+      case "blog_admin":  return isAdmin ? <ScreenBlogAdmin onRefresh={refresh}/> : <ScreenOverview/>;
+      case "mon_site":    return <ScreenMonSite/>;
+      case "suivi":       return <ScreenSuivi/>;
       case "account":     return <ScreenAccount user={user} userClient={userClient} isAdmin={isAdmin} onRefresh={refresh}/>;
       default:            return <ScreenOverview/>;
     }
