@@ -2804,6 +2804,12 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       github_branch: c.github_branch || "main",
       github_content_path: c.github_content_path || "content/blog/",
       site_public_url: c.site_public_url || "",
+      canal_notif: c.canal_notif || "whatsapp",
+      whatsapp_phone: c.whatsapp_phone || "",
+      whatsapp_actif: !!c.whatsapp_actif,
+      telegram_chat_id: c.telegram_chat_id || "",
+      telegram_actif: !!c.telegram_actif,
+      avis_google_url: c.avis_google_url || "",
     };
   }
 
@@ -2849,6 +2855,12 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       github_branch: (draft.github_branch || "").trim() || "main",
       github_content_path: (draft.github_content_path || "").trim() || "content/blog/",
       site_public_url: (draft.site_public_url || "").trim() || null,
+      canal_notif: draft.canal_notif || "whatsapp",
+      whatsapp_phone: (draft.whatsapp_phone || "").trim() || null,
+      whatsapp_actif: !!draft.whatsapp_actif,
+      telegram_chat_id: (draft.telegram_chat_id || "").trim() || null,
+      telegram_actif: !!draft.telegram_actif,
+      avis_google_url: (draft.avis_google_url || "").trim() || null,
       drive_folder_id: draft.drive_folder_id.trim() || null,
       telegram_notify: !!draft.telegram_notify,
       notes_internes: draft.notes_internes.trim() || null,
@@ -3293,11 +3305,52 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                   })()}
                 </_AdminSection>
 
-                <_AdminSection title="Notifications">
-                  <label className="row" style={{ gap: 8, cursor: "pointer" }}>
+                <_AdminSection title="Notifications artisan">
+                  <_AdminField label="Canal de notification *"
+                               hint="Le canal sur lequel l'artisan reçoit les nouveaux leads, RDV, devis, bilans.">
+                    <select className="search" style={{ minWidth: 0, width: "100%", cursor: "pointer", color: "var(--text-1)" }}
+                            value={draft.canal_notif || "whatsapp"}
+                            onChange={e => setDraft({ ...draft, canal_notif: e.target.value })}>
+                      <option value="whatsapp">📱 WhatsApp uniquement</option>
+                      <option value="telegram">✈️ Telegram uniquement</option>
+                      <option value="les_deux">📱 + ✈️ Les deux</option>
+                    </select>
+                  </_AdminField>
+                  <div className="grid g-2" style={{ gap: 10 }}>
+                    <_AdminField label="Numéro WhatsApp" hint="Format : 336XXXXXXXX (sans + ni espaces)">
+                      <input className="search" type="tel" placeholder="336612345678"
+                             style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                             value={draft.whatsapp_phone || ""}
+                             onChange={e => setDraft({ ...draft, whatsapp_phone: e.target.value })}/>
+                      <label className="row" style={{ gap: 8, cursor: "pointer", marginTop: 6 }}>
+                        <input type="checkbox" checked={!!draft.whatsapp_actif}
+                               onChange={e => setDraft({ ...draft, whatsapp_actif: e.target.checked })}/>
+                        <span className="small">WhatsApp actif</span>
+                      </label>
+                    </_AdminField>
+                    <_AdminField label="Telegram Chat ID" hint="L'artisan envoie un message au bot Telegram pour obtenir son ID.">
+                      <input className="search" type="text" placeholder="123456789"
+                             style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                             value={draft.telegram_chat_id || ""}
+                             onChange={e => setDraft({ ...draft, telegram_chat_id: e.target.value })}/>
+                      <label className="row" style={{ gap: 8, cursor: "pointer", marginTop: 6 }}>
+                        <input type="checkbox" checked={!!draft.telegram_actif}
+                               onChange={e => setDraft({ ...draft, telegram_actif: e.target.checked })}/>
+                        <span className="small">Telegram actif</span>
+                      </label>
+                    </_AdminField>
+                  </div>
+                  <_AdminField label="URL d'avis Google" hint="Lien direct vers les avis de la fiche GMB. Utilisé par le bot pour relancer les clients après chantier.">
+                    <input className="search" type="url"
+                           placeholder="https://g.page/r/XXXXXX/review"
+                           style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           value={draft.avis_google_url || ""}
+                           onChange={e => setDraft({ ...draft, avis_google_url: e.target.value })}/>
+                  </_AdminField>
+                  <label className="row" style={{ gap: 8, cursor: "pointer", marginTop: 6 }}>
                     <input type="checkbox" checked={draft.telegram_notify}
                            onChange={e => setDraft({ ...draft, telegram_notify: e.target.checked })}/>
-                    <span className="small">Notifications Telegram activées pour ce client</span>
+                    <span className="small muted">Notifications Telegram (legacy / agence)</span>
                   </label>
                 </_AdminSection>
 
@@ -4300,7 +4353,18 @@ const TABLE_SCHEMAS = {
       { key: "source", label: "Source *", type: "select", required: true,
         options: ["google_ads","meta","gmb","site","autre","appel","lsa"] },
       { key: "statut", label: "Statut *", type: "select", required: true,
-        options: ["nouveau","contacté","qualifié","gagné","perdu"] },
+        options: HELPAI_LEAD_STATUT_OPTIONS },
+      { key: "qualifie", label: "Lead qualifié", type: "bool" },
+      { key: "proprietaire", label: "Propriétaire / Locataire", type: "select",
+        options: ["proprietaire","locataire"] },
+      { key: "prestation", label: "Prestation demandée", type: "text" },
+      { key: "urgence", label: "Urgence", type: "select",
+        options: ["urgent","moyen","futur"] },
+      { key: "priorite", label: "Priorité", type: "select",
+        options: ["haute","normale","basse"] },
+      { key: "rdv_datetime", label: "Date du RDV", type: "datetime" },
+      { key: "montant_chantier", label: "Montant chantier (cts)", type: "int",
+        hint: "En centimes — 350000 = 3500 €" },
       { key: "message", label: "Message", type: "textarea" },
       { key: "utm_source", label: "UTM source", type: "text" },
       { key: "utm_medium", label: "UTM medium", type: "text" },
@@ -4388,13 +4452,17 @@ function _RowForm({ schema, draft, setDraft, onSave, onCancel, busy, title }) {
             );
           }
           const inputType = f.type === "date" ? "date"
+                          : f.type === "datetime" ? "datetime-local"
                           : f.type === "email" ? "email"
                           : f.type === "tel" ? "tel"
                           : f.type === "url" ? "url"
                           : (f.type === "int" || f.type === "num") ? "number"
                           : "text";
           const stepAttr = f.type === "num" ? "any" : (f.type === "int" ? "1" : undefined);
-          const inputVal = f.type === "date" ? dateValue(v) : (v == null ? "" : String(v));
+          const dateTimeValue = (val) => val ? String(val).slice(0, 16) : "";
+          const inputVal = f.type === "date" ? dateValue(v)
+                         : f.type === "datetime" ? dateTimeValue(v)
+                         : (v == null ? "" : String(v));
           return (
             <_AdminField key={f.key} label={f.label} hint={f.hint}>
               <input className="search" type={inputType} step={stepAttr}
@@ -4459,6 +4527,7 @@ function _TableEditor({ table, clientId, onChanged }) {
       else if (f.type === "int") { v = parseInt(v, 10); if (Number.isNaN(v)) v = null; }
       else if (f.type === "num") { v = parseFloat(v); if (Number.isNaN(v)) v = null; }
       else if (f.type === "bool") v = !!v;
+      else if (f.type === "datetime") { try { v = new Date(v).toISOString(); } catch (e) { v = null; } }
       else if (typeof v === "string") v = v.trim() || null;
       p[f.key] = v;
     });
@@ -4885,6 +4954,51 @@ window.ScreenCustomers = ScreenCustomers;
 /* AI Activity, Automations, Integrations, Team screens */
 
 /* Helper used by both ScreenAI and ScreenAds to format relative time */
+/* Lead status badge helper — covers all statuts of the artisan automation flow */
+const HELPAI_LEAD_STATUTS = {
+  "nouveau":                { color: "var(--accent)",       label: "Nouveau" },
+  "qualification_en_cours": { color: "var(--info)",         label: "Qualification…" },
+  "qualifie":               { color: "var(--info)",         label: "Qualifié" },
+  "qualifié":               { color: "var(--info)",         label: "Qualifié" },
+  "contacte":               { color: "oklch(0.74 0.10 240)", label: "Contacté" },
+  "contacté":               { color: "oklch(0.74 0.10 240)", label: "Contacté" },
+  "rappel":                 { color: "var(--accent)",       label: "À rappeler" },
+  "rdv_pris":               { color: "oklch(0.72 0.15 300)", label: "RDV pris 📅" },
+  "rdv_effectue":           { color: "oklch(0.65 0.15 290)", label: "RDV effectué" },
+  "no_show":                { color: "var(--danger)",       label: "No-show ⚠" },
+  "devis_a_envoyer":        { color: "var(--accent)",       label: "Devis à faire" },
+  "devis_envoye":           { color: "oklch(0.84 0.15 95)", label: "Devis envoyé" },
+  "devis_signe":            { color: "var(--success)",      label: "Signé ✓" },
+  "devis_perdu":            { color: "var(--text-3)",       label: "Devis perdu" },
+  "chantier_en_cours":      { color: "var(--success)",      label: "En cours 🔧" },
+  "chantier_termine":       { color: "oklch(0.65 0.13 155)", label: "Terminé ✓" },
+  "gagne":                  { color: "var(--success)",      label: "Gagné 🏆" },
+  "gagné":                  { color: "var(--success)",      label: "Gagné 🏆" },
+  "perdu":                  { color: "var(--text-3)",       label: "Perdu" },
+};
+function helpAiLeadStatut(s) {
+  return HELPAI_LEAD_STATUTS[String(s || "").toLowerCase()] || { color: "var(--text-3)", label: s || "—" };
+}
+function HelpAiLeadStatutBadge({ statut }) {
+  const d = helpAiLeadStatut(statut);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: d.color }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: d.color, flexShrink: 0 }}/>
+      {d.label}
+    </span>
+  );
+}
+window.helpAiLeadStatut = helpAiLeadStatut;
+window.HelpAiLeadStatutBadge = HelpAiLeadStatutBadge;
+
+const HELPAI_LEAD_STATUT_OPTIONS = [
+  "nouveau", "qualification_en_cours", "qualifie", "contacte", "rappel",
+  "rdv_pris", "rdv_effectue", "no_show",
+  "devis_a_envoyer", "devis_envoye", "devis_signe", "devis_perdu",
+  "chantier_en_cours", "chantier_termine",
+  "gagne", "perdu",
+];
+
 function helpAiRelTime(iso, nowMs) {
   if (!iso) return "—";
   const now = nowMs || Date.now();
