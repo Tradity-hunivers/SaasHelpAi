@@ -2781,8 +2781,39 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
   const [feedback, setFeedback]     = React.useState(null);
   const [gmbPicker, setGmbPicker]   = React.useState({ open: false, loading: false, data: null, error: null, linking: null });
   const [previewBlog, setPreviewBlog] = React.useState(null); // { post } | null
+  const [caRows, setCaRows] = React.useState([]);
+  const [autoLog, setAutoLog] = React.useState([]);
 
   const selected = allClients.find(c => c.id === selectedId) || null;
+
+  React.useEffect(() => {
+    if (!selected) { setCaRows([]); setAutoLog([]); return; }
+    sb.from("agency_ca_mensuel").select("*")
+      .eq("client_id", selected.id)
+      .order("mois", { ascending: false }).limit(6)
+      .then(({ data }) => setCaRows(data || []));
+    sb.from("agency_automation_log").select("*")
+      .eq("client_id", selected.id)
+      .order("created_at", { ascending: false }).limit(20)
+      .then(({ data }) => setAutoLog(data || []));
+  }, [selected && selected.id]);
+
+  function automationLabel(t) {
+    const map = {
+      sms_qual_1: "Qualification SMS envoyée",
+      sms_qual_2: "Relance qualification",
+      sms_rdv_rappel: "Rappel RDV envoyé",
+      sms_devis_relance: "Relance devis envoyée",
+      sms_avis_demande: "Demande d'avis envoyée",
+      lead_assignation: "Lead assigné à l'artisan",
+      bilan_mensuel: "Bilan mensuel envoyé",
+      whatsapp_envoye: "Notification WhatsApp",
+      telegram_envoye: "Notification Telegram",
+      rdv_pris: "RDV pris automatiquement",
+      no_show_detect: "No-show détecté",
+    };
+    return map[t] || (t || "—").replace(/_/g, " ");
+  }
 
   function buildDraft(c) {
     return {
@@ -3375,6 +3406,125 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                     {saving ? "Enregistrement…" : "Enregistrer"}
                   </button>
                 </div>
+
+                {/* === CA Mensuel === */}
+                <_AdminSection title="💶 CA Mensuel">
+                  {caRows.length === 0 && (
+                    <div className="muted small" style={{ padding: 12, textAlign: "center", border: "1px dashed var(--border-soft)", borderRadius: 8 }}>
+                      Aucune donnée CA pour ce client. La table agency_ca_mensuel est alimentée par le worker bilan.
+                    </div>
+                  )}
+                  {caRows.length > 0 && (() => {
+                    const cur = caRows[0] || {};
+                    const total6m = caRows.reduce((s, r) => s + (Number(r.ca_total) || 0), 0);
+                    const maxCA = Math.max(1, ...caRows.map(r => Number(r.ca_total) || 0));
+                    return (
+                      <React.Fragment>
+                        <div className="grid g-2" style={{ gap: 10 }}>
+                          <div className="kpi" style={{ padding: 12 }}>
+                            <div className="kpi-label">
+                              <span>CA ce mois</span>
+                              {cur.ca_delta_pct != null && (
+                                <span className={"trend " + (Number(cur.ca_delta_pct) >= 0 ? "up" : "down")}>
+                                  {(Number(cur.ca_delta_pct) >= 0 ? "+" : "") + Number(cur.ca_delta_pct).toFixed(1) + "%"}
+                                </span>
+                              )}
+                            </div>
+                            <div className="kpi-value"><span className="mono">{Math.round((cur.ca_total || 0) / 100).toLocaleString("fr-FR")}</span><span className="unit">€</span></div>
+                          </div>
+                          <div className="kpi" style={{ padding: 12 }}>
+                            <div className="kpi-label"><span>Chantiers signés</span></div>
+                            <div className="kpi-value"><span className="mono">{cur.nb_chantiers || 0}</span></div>
+                          </div>
+                          <div className="kpi" style={{ padding: 12 }}>
+                            <div className="kpi-label"><span>Panier moyen</span></div>
+                            <div className="kpi-value"><span className="mono">{Math.round((cur.panier_moyen || 0) / 100).toLocaleString("fr-FR")}</span><span className="unit">€</span></div>
+                          </div>
+                          <div className="kpi" style={{ padding: 12 }}>
+                            <div className="kpi-label"><span>CA cumulé 6 mois</span></div>
+                            <div className="kpi-value"><span className="mono">{Math.round(total6m / 100).toLocaleString("fr-FR")}</span><span className="unit">€</span></div>
+                          </div>
+                        </div>
+                        {/* Mini bar chart */}
+                        <div style={{ marginTop: 10, padding: 12, border: "1px solid var(--border-soft)", borderRadius: 10, background: "var(--bg-2)" }}>
+                          <div className="small muted" style={{ marginBottom: 8, fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Évolution CA · 6 derniers mois</div>
+                          <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80 }}>
+                            {caRows.slice().reverse().map((r, i) => {
+                              const h = ((Number(r.ca_total) || 0) / maxCA) * 100;
+                              return (
+                                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                  <div style={{ width: "100%", flex: 1, display: "flex", alignItems: "flex-end" }}>
+                                    <div style={{ width: "100%", height: h + "%", background: "var(--accent)", borderRadius: 3, minHeight: 2 }} title={Math.round((r.ca_total||0)/100).toLocaleString("fr-FR") + " €"}/>
+                                  </div>
+                                  <div className="small muted" style={{ fontSize: 9.5 }}>{r.mois ? new Date(r.mois).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }) : "—"}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {/* Sources breakdown for current month */}
+                        <div className="grid g-3" style={{ gap: 8, marginTop: 10 }}>
+                          {[
+                            { k: "site",       l: "Site web",    ca: cur.ca_site,       n: cur.ch_site },
+                            { k: "google_ads", l: "Google Ads",  ca: cur.ca_google_ads, n: cur.ch_google_ads },
+                            { k: "meta",       l: "Meta Ads",    ca: cur.ca_meta,       n: cur.ch_meta },
+                            { k: "appel",      l: "Appel direct",ca: cur.ca_appel,      n: cur.ch_appel },
+                            { k: "lsa",        l: "LSA",         ca: cur.ca_lsa,        n: cur.ch_lsa },
+                            { k: "autre",      l: "Autre",       ca: cur.ca_autre,      n: cur.ch_autre },
+                          ].filter(x => Number(x.ca) > 0 || Number(x.n) > 0).map(s => (
+                            <div key={s.k} style={{ padding: 10, border: "1px solid var(--border-soft)", borderRadius: 8 }}>
+                              <div className="small muted" style={{ fontSize: 10.5, fontWeight: 600 }}>{s.l}</div>
+                              <div className="mono" style={{ fontWeight: 600 }}>{Math.round((s.ca || 0)/100).toLocaleString("fr-FR")} € · {s.n || 0} ch.</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="row" style={{ justifyContent: "flex-end", marginTop: 10 }}>
+                          <button className="btn small" onClick={async () => {
+                            setFeedback({ type: "ok", msg: "Envoi du bilan en cours…" });
+                            try {
+                              const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/agency-bilan-mensuel", {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ client_id: selected.id }),
+                              });
+                              const j = await r.json().catch(() => ({}));
+                              if (!r.ok) { setFeedback({ type: "error", msg: "Échec de l'envoi : " + (j.error || j.message || r.status) }); return; }
+                              setFeedback({ type: "ok", msg: "Bilan mensuel envoyé sur le canal de l'artisan." });
+                              if (onRefresh) onRefresh();
+                            } catch (e) { setFeedback({ type: "error", msg: String(e) }); }
+                          }}>
+                            <Icon name="external" size={12}/> 📧 Envoyer le bilan
+                          </button>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })()}
+                </_AdminSection>
+
+                {/* === Journal des automations === */}
+                <_AdminSection title="🤖 Journal des automations">
+                  {autoLog.length === 0 && (
+                    <div className="muted small" style={{ padding: 12, textAlign: "center", border: "1px dashed var(--border-soft)", borderRadius: 8 }}>
+                      Aucune automation déclenchée pour ce client.
+                    </div>
+                  )}
+                  {autoLog.length > 0 && (
+                    <div className="stack-sm">
+                      {autoLog.map(a => (
+                        <div key={a.id} className="row between" style={{ padding: "8px 12px", border: "1px solid var(--border-soft)", borderRadius: 8 }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 12.5 }}>{automationLabel(a.type)}</div>
+                            <div className="small muted">
+                              {a.cible === "prospect" ? "→ vers le prospect" : a.cible === "artisan" ? "→ vers l'artisan" : (a.cible || "—")}
+                              {a.statut && <> · <span style={{ color: a.statut === "ok" || a.statut === "envoye" ? "var(--success)" : a.statut === "echec" ? "var(--danger)" : "var(--text-3)" }}>{a.statut}</span></>}
+                              {a.detail && " · " + String(a.detail).slice(0, 60)}
+                            </div>
+                          </div>
+                          <span className="mono small muted" style={{ fontSize: 10.5 }}>{timeAgo(a.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </_AdminSection>
               </div>
             </React.Fragment>
           )}
