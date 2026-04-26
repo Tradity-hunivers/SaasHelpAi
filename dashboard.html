@@ -1596,6 +1596,17 @@ async function loadAllData({ isAdmin, clientId, dateRange }) {
     scheduledPostsRows = data || [];
   } catch (e) { scheduledPostsRows = []; }
 
+  /* agency_blog_posts (date-filtered — uses created_at OR scheduled_at) */
+  let blogPostsRows = [];
+  try {
+    let qbp = sb.from('agency_blog_posts').select('*')
+      .or(`and(created_at.gte.${startTs},created_at.lte.${endTs}),and(scheduled_at.gte.${startTs},scheduled_at.lte.${endTs}),and(publie_le.gte.${startTs},publie_le.lte.${endTs})`)
+      .order('created_at', { ascending: false }).limit(200);
+    if (clientFilter) qbp = qbp.eq('client_id', clientFilter);
+    const { data } = await qbp;
+    blogPostsRows = data || [];
+  } catch (e) { blogPostsRows = []; }
+
   /* lsa_leads (Google Local Services Ads — admin only) */
   let lsaLeadsRows = [];
   if (isAdmin) {
@@ -1937,6 +1948,7 @@ async function loadAllData({ isAdmin, clientId, dateRange }) {
     __HELPAI_LSA_LEADS: lsaLeadsRows,
     __HELPAI_KPIS_ROWS: kpisRows,
     __HELPAI_GMB_CLIENT_LIST: gmbClientsRows,
+    __HELPAI_BLOG_POSTS: blogPostsRows,
   });
 }
 window.loadAllData = loadAllData;
@@ -2004,6 +2016,7 @@ function AuthGate() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'gmb_reports' },         reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scheduled_posts' },     reload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lsa_leads' },           reload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agency_blog_posts' },   reload)
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [state.status, state.isAdmin, state.client]);
@@ -4640,6 +4653,7 @@ function ScreenAI() {
   const reports        = window.__HELPAI_GMB_REPORTS || [];
   const leads          = window.__HELPAI_LEADS_ROWS || [];
   const clients        = window.__HELPAI_CLIENTS_ROWS || [];
+  const blogPosts      = window.__HELPAI_BLOG_POSTS || [];
 
   // Guard: when scoped to a single client (client view, or admin "view as client"),
   // require their GMB to be connected. Otherwise show an empty-state CTA.
@@ -4692,13 +4706,17 @@ function ScreenAI() {
   const reviewsRepliedThisMonth = reviews.filter(r => r.replied_at && new Date(r.replied_at) >= monthStart);
   const reportsThisMonth = reports.filter(r => r.created_at && new Date(r.created_at) >= monthStart);
 
-  const totalActionsLive = postsPublished.length + reviews.filter(r => r.reply_text).length + reports.length;
-  const totalActions = totalActionsLive + customActions.filter(a => a.kind === "past").length;
-  const actionsThisMonth = postsThisMonth.length + reviewsRepliedThisMonth.length + reportsThisMonth.length;
+  const blogPublished = blogPosts.filter(b => b.statut === "published" || b.publie_le);
+  const blogScheduled = blogPosts.filter(b => (b.statut === "scheduled" || b.statut === "draft") && b.scheduled_at && new Date(b.scheduled_at).getTime() > now);
+  const blogThisMonth = blogPublished.filter(b => b.publie_le && new Date(b.publie_le) >= monthStart);
 
-  const minutesSaved = postsPublished.length * 5 + reviews.filter(r => r.reply_text).length * 3 + reports.length * 30 + customActions.filter(a => a.kind === "past").length * 5;
+  const totalActionsLive = postsPublished.length + reviews.filter(r => r.reply_text).length + reports.length + blogPublished.length;
+  const totalActions = totalActionsLive + customActions.filter(a => a.kind === "past").length;
+  const actionsThisMonth = postsThisMonth.length + reviewsRepliedThisMonth.length + reportsThisMonth.length + blogThisMonth.length;
+
+  const minutesSaved = postsPublished.length * 5 + reviews.filter(r => r.reply_text).length * 3 + reports.length * 30 + blogPublished.length * 45 + customActions.filter(a => a.kind === "past").length * 5;
   const daysSaved = (minutesSaved / 60 / 8).toFixed(1);
-  const minutesSavedMonth = postsThisMonth.length * 5 + reviewsRepliedThisMonth.length * 3 + reportsThisMonth.length * 30;
+  const minutesSavedMonth = postsThisMonth.length * 5 + reviewsRepliedThisMonth.length * 3 + reportsThisMonth.length * 30 + blogThisMonth.length * 45;
   const daysSavedMonth = (minutesSavedMonth / 60 / 8).toFixed(1);
 
   const leadsToFollowUp = leads.filter(l => {
@@ -4730,6 +4748,19 @@ function ScreenAI() {
   });
   reports.slice(0, 30).forEach(r => {
     feed.push({ id: "rep-" + r.report_id, type: "report", label: "Rapport de performance généré", who: clientNameById(r.agency_client_id), detail: "Période " + (r.periode_debut || "?") + " → " + (r.periode_fin || "?") + " · " + (r.total_vues || 0) + " vues", time: r.created_at, icon: "save", tone: "var(--info)" });
+  });
+  // Blog posts published
+  blogPublished.slice(0, 30).forEach(b => {
+    feed.push({
+      id: "blog-" + b.id,
+      type: "blog",
+      label: "Article de blog publié",
+      who: clientNameById(b.client_id),
+      detail: (b.titre || "—") + (b.meta_description ? " · " + b.meta_description.slice(0, 100) : ""),
+      time: b.publie_le || b.created_at,
+      icon: "edit",
+      tone: "var(--accent-2)",
+    });
   });
   // Merge custom past actions
   customActions.filter(a => a.kind === "past").forEach(a => {
@@ -4854,7 +4885,7 @@ function ScreenAI() {
             </button>
           </div>
           <div className="card-body" style={{ padding: 0, maxHeight: 520, overflow: "auto" }}>
-            {postsScheduled.length === 0 && leadsToFollowUp.length === 0 && customActions.filter(a => a.kind === "future").length === 0 && (
+            {postsScheduled.length === 0 && leadsToFollowUp.length === 0 && customActions.filter(a => a.kind === "future").length === 0 && blogScheduled.length === 0 && (
               <div className="muted small" style={{ padding: 20, textAlign: "center" }}>Rien de planifié pour l'instant.</div>
             )}
             {customActions.filter(a => a.kind === "future").map((a) => (
@@ -4891,6 +4922,20 @@ function ScreenAI() {
                 </div>
                 <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>Client : <strong style={{ color: "var(--text-2)" }}>{clientNameByGmbId(p.client_id)}</strong></div>
                 <div className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}>{(p.post_text || "").slice(0, 120)}…</div>
+              </div>
+            ))}
+            {blogScheduled.slice(0, 8).map((b) => (
+              <div key={"blog-sched-" + b.id} style={{ padding: "12px 18px", borderBottom: "1px solid var(--border-soft)" }}>
+                <div className="row between" style={{ marginBottom: 4 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <Icon name="edit" size={13} style={{ color: "var(--accent-2)" }}/>
+                    <span style={{ fontSize: 12.5, fontWeight: 600 }}>Article de blog planifié</span>
+                    <span className="tag accent">{b.statut}</span>
+                  </div>
+                  <span className="mono small" style={{ color: "var(--accent-2)" }}>{helpAiRelTime(b.scheduled_at, now)}</span>
+                </div>
+                <div className="small" style={{ color: "var(--text-3)", marginBottom: 4 }}>Client : <strong style={{ color: "var(--text-2)" }}>{clientNameById(b.client_id)}</strong></div>
+                <div className="small" style={{ color: "var(--text-2)", lineHeight: 1.5 }}>{b.titre || "—"}</div>
               </div>
             ))}
             {leadsToFollowUp.slice(0, 8).map((l) => {
