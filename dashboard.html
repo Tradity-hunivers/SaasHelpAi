@@ -1963,6 +1963,7 @@ function AuthGate() {
   const [password, setPassword] = React.useState('');
   const [loginError, setLoginError] = React.useState('');
   const [loggingIn, setLoggingIn] = React.useState(false);
+  const [showPwd, setShowPwd] = React.useState(false);
 
   const resolveRole = React.useCallback(async (session) => {
     if (!session || !session.user) { setState({ status: 'login' }); return; }
@@ -2055,9 +2056,22 @@ function AuthGate() {
             </div>
             <div className="stack-xs">
               <label className="small muted">Mot de passe</label>
-              <input className="search" style={{ minWidth: 0, cursor:'text' }}
-                     type="password" autoComplete="current-password" required
-                     value={password} onChange={e => setPassword(e.target.value)}/>
+              <div style={{ position: "relative" }}>
+                <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", paddingRight: 38 }}
+                       type={showPwd ? "text" : "password"} autoComplete="current-password" required
+                       value={password} onChange={e => setPassword(e.target.value)}/>
+                <button type="button"
+                        onClick={() => setShowPwd(s => !s)}
+                        title={showPwd ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                        style={{
+                          position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
+                          width: 30, height: 30, border: 0, background: "transparent",
+                          color: "var(--text-3)", cursor: "pointer",
+                          display: "grid", placeItems: "center", borderRadius: 6,
+                        }}>
+                  <Icon name="eye" size={14}/>
+                </button>
+              </div>
             </div>
             <button className="btn primary" type="submit"
                     disabled={loggingIn}
