@@ -2799,6 +2799,10 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       drive_folder_id: c.drive_folder_id || "",
       telegram_notify: !!c.telegram_notify,
       notes_internes: c.notes_internes || "",
+      github_repo: c.github_repo || "",
+      github_branch: c.github_branch || "main",
+      github_content_path: c.github_content_path || "content/blog/",
+      site_public_url: c.site_public_url || "",
     };
   }
 
@@ -2840,6 +2844,10 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       google_ads_id: draft.google_ads_id.trim() || null,
       meta_ads_id: draft.meta_ads_id.trim() || null,
       ga4_property_id: (draft.ga4_property_id || "").trim() || null,
+      github_repo: (draft.github_repo || "").trim() || null,
+      github_branch: (draft.github_branch || "").trim() || "main",
+      github_content_path: (draft.github_content_path || "").trim() || "content/blog/",
+      site_public_url: (draft.site_public_url || "").trim() || null,
       drive_folder_id: draft.drive_folder_id.trim() || null,
       telegram_notify: !!draft.telegram_notify,
       notes_internes: draft.notes_internes.trim() || null,
@@ -3173,6 +3181,112 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                            placeholder="1aBcDeFgHiJkLmNoPqRsTuVwXyZ"
                            value={draft.drive_folder_id} onChange={e => setDraft({ ...draft, drive_folder_id: e.target.value })}/>
                   </_AdminField>
+                </_AdminSection>
+
+                <_AdminSection title="Articles de blog · génération automatique">
+                  <_AdminField label="Repo GitHub (owner/repo)"
+                               hint="ex: helpaiagency/site-sandy-fleurs · le push se fait sur la branche ci-dessous">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="owner/repo"
+                           value={draft.github_repo || ""} onChange={e => setDraft({ ...draft, github_repo: e.target.value })}/>
+                  </_AdminField>
+                  <div className="grid g-2" style={{ gap: 10 }}>
+                    <_AdminField label="Branche">
+                      <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                             placeholder="main"
+                             value={draft.github_branch || ""} onChange={e => setDraft({ ...draft, github_branch: e.target.value })}/>
+                    </_AdminField>
+                    <_AdminField label="Dossier des articles" hint="ex: content/blog/ ou src/content/posts/">
+                      <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                             placeholder="content/blog/"
+                             value={draft.github_content_path || ""} onChange={e => setDraft({ ...draft, github_content_path: e.target.value })}/>
+                    </_AdminField>
+                  </div>
+                  <_AdminField label="URL publique du site"
+                               hint="Sert à reconstruire l'URL de l'article publié (ex: https://sandy-fleurs.fr/blog)">
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="https://sandy-fleurs.fr/blog"
+                           value={draft.site_public_url || ""} onChange={e => setDraft({ ...draft, site_public_url: e.target.value })}/>
+                  </_AdminField>
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn primary small"
+                      onClick={async () => {
+                        setFeedback({ type: "ok", msg: "Génération en cours via DeepSeek…" });
+                        try {
+                          const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/blog-generate", {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ agencyClientId: selected.id }),
+                          });
+                          const j = await r.json();
+                          if (!r.ok || j.error) {
+                            setFeedback({ type: "error", msg: "Génération échouée : " + (j.message || j.error || r.status) });
+                            return;
+                          }
+                          setFeedback({ type: "ok", msg: "Article généré : « " + (j.post && j.post.titre) + " ». Va dans Activité IA pour le voir." });
+                          if (onRefresh) onRefresh();
+                        } catch (e) {
+                          setFeedback({ type: "error", msg: String(e) });
+                        }
+                      }}
+                    >
+                      <Icon name="sparkles" size={12}/> Générer un article (DeepSeek)
+                    </button>
+                  </div>
+                  <div className="small muted" style={{ fontSize: 10.5, marginTop: 6 }}>
+                    L'article est stocké en <code>draft</code> dans <code>agency_blog_posts</code>. Pour publier sur le site, sélectionne-le dans la liste ci-dessous puis clique sur Publier (push GitHub → Cloudflare Pages rebuild).
+                  </div>
+
+                  {(() => {
+                    const myPosts = (window.__HELPAI_BLOG_POSTS || []).filter(b => b.client_id === selected.id).slice(0, 10);
+                    if (myPosts.length === 0) {
+                      return <div className="small muted" style={{ padding: 12, textAlign: "center", border: "1px dashed var(--border-soft)", borderRadius: 8, marginTop: 8 }}>Aucun article pour ce client. Clique sur Générer un article pour démarrer.</div>;
+                    }
+                    return (
+                      <div className="stack-sm" style={{ marginTop: 10 }}>
+                        {myPosts.map(b => {
+                          const tone = b.statut === "published" ? "success" : b.statut === "failed" ? "danger" : "accent";
+                          return (
+                            <div key={b.id} className="row between" style={{ padding: 10, border: "1px solid var(--border-soft)", borderRadius: 8, gap: 10 }}>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontWeight: 600, fontSize: 12.5, marginBottom: 2 }}>{b.titre || "—"}</div>
+                                <div className="small muted">
+                                  {(b.nb_mots || 0)} mots · {(b.temps_lecture || 0)} min · {new Date(b.created_at).toLocaleDateString("fr-FR")}
+                                  {b.url_publique && <> · <a href={b.url_publique} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>voir en ligne</a></>}
+                                </div>
+                                {b.erreur_message && <div className="small" style={{ color: "var(--danger)", marginTop: 2 }}>{b.erreur_message}</div>}
+                              </div>
+                              <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+                                <span className={"tag " + tone}>{b.statut}</span>
+                                {b.statut !== "published" && (
+                                  <button className="btn small primary" onClick={async () => {
+                                    setFeedback({ type: "ok", msg: "Publication en cours sur GitHub…" });
+                                    try {
+                                      const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/blog-publish", {
+                                        method: "POST", headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ postId: b.id }),
+                                      });
+                                      const j = await r.json();
+                                      if (!r.ok || j.error) { setFeedback({ type: "error", msg: "Publication échouée : " + (j.message || j.error || r.status) }); return; }
+                                      setFeedback({ type: "ok", msg: "Article publié sur GitHub. Cloudflare Pages reconstruit le site dans 1-2 min." });
+                                      if (onRefresh) onRefresh();
+                                    } catch (e) { setFeedback({ type: "error", msg: String(e) }); }
+                                  }}><Icon name="external" size={11}/> Publier</button>
+                                )}
+                                <button className="btn small" onClick={async () => {
+                                  if (!window.confirm("Supprimer cet article ? (ne supprime pas le fichier sur GitHub si déjà publié)")) return;
+                                  const { error } = await sb.from("agency_blog_posts").delete().eq("id", b.id);
+                                  if (error) setFeedback({ type: "error", msg: error.message });
+                                  else { setFeedback({ type: "ok", msg: "Article supprimé." }); if (onRefresh) onRefresh(); }
+                                }} style={{ color: "var(--danger)" }}>×</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </_AdminSection>
 
                 <_AdminSection title="Notifications">
