@@ -2782,6 +2782,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       gmb_client_id: c.gmb_client_id || "",
       google_ads_id: c.google_ads_id || "",
       meta_ads_id: c.meta_ads_id || "",
+      ga4_property_id: c.ga4_property_id || "",
       drive_folder_id: c.drive_folder_id || "",
       telegram_notify: !!c.telegram_notify,
       notes_internes: c.notes_internes || "",
@@ -2825,6 +2826,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       gmb_client_id: draft.gmb_client_id.trim() || null,
       google_ads_id: draft.google_ads_id.trim() || null,
       meta_ads_id: draft.meta_ads_id.trim() || null,
+      ga4_property_id: (draft.ga4_property_id || "").trim() || null,
       drive_folder_id: draft.drive_folder_id.trim() || null,
       telegram_notify: !!draft.telegram_notify,
       notes_internes: draft.notes_internes.trim() || null,
@@ -3071,6 +3073,31 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                     <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
                            placeholder="act_1234567890"
                            value={draft.meta_ads_id} onChange={e => setDraft({ ...draft, meta_ads_id: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Google Analytics 4 — ID de propriété"
+                               hint={selected.ga4_property_id
+                                 ? ("✓ Lié · " + (selected.ga4_connected_at ? "OAuth OK" : "Saisie ID seul, OAuth non lancé"))
+                                 : "Format properties/123456789 (ou juste le numéro). Connecte d'abord le compte Google ci-dessous, puis colle l'ID de propriété."}>
+                    <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
+                           placeholder="properties/123456789"
+                           value={draft.ga4_property_id || ""}
+                           onChange={e => setDraft({ ...draft, ga4_property_id: e.target.value })}/>
+                    <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className="btn small"
+                        onClick={async () => {
+                          try {
+                            const r = await fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/ga4-oauth-url?agencyClientId=" + encodeURIComponent(selected.id) + "&clientName=" + encodeURIComponent(selected.nom || ""));
+                            const j = await r.json();
+                            if (j.url) { window.open(j.url, "_blank", "width=560,height=720"); setFeedback({ type: "ok", msg: "Fenêtre Google ouverte. Termine l'autorisation, puis Actualise." }); }
+                            else setFeedback({ type: "error", msg: "URL OAuth indisponible : " + (j.error || j.message || "réponse vide") });
+                          } catch (e) { setFeedback({ type: "error", msg: String(e) }); }
+                        }}
+                      >
+                        <Icon name="external" size={12}/> {selected.ga4_connected_at ? "Reconnecter Google Analytics" : "Connecter Google Analytics"}
+                      </button>
+                    </div>
                   </_AdminField>
                   <_AdminField label="Local Services Ads — Compte Google connecté"
                                hint={selected.lsa_account_id
@@ -5040,6 +5067,289 @@ function ScreenAds() {
 
 window.ScreenAds = ScreenAds;
 
+/* ============ Site web (Google Analytics + UTM tracking) ============ */
+function ScreenSiteWeb() {
+  const clients = window.__HELPAI_CLIENTS_ROWS || [];
+  const leads   = window.__HELPAI_LEADS_ROWS || [];
+
+  const scopedClient = clients.length === 1 ? clients[0] : null;
+  const range = ((window.__HELPAI_RANGE && window.__HELPAI_RANGE.preset) || "12m").toLowerCase();
+  const rangeStart = (window.__HELPAI_RANGE && window.__HELPAI_RANGE.start) || null;
+  const rangeEnd   = (window.__HELPAI_RANGE && window.__HELPAI_RANGE.end)   || null;
+
+  const [ga, setGa]           = React.useState(null);
+  const [gaLoading, setGaLoad]= React.useState(false);
+  const [gaError, setGaError] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!scopedClient || !scopedClient.ga4_property_id) { setGa(null); setGaError(null); return; }
+    setGaLoad(true); setGaError(null);
+    fetch("https://wodlupbffooqtshgasml.supabase.co/functions/v1/ga4-fetch-stats", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agencyClientId: scopedClient.id, startDate: rangeStart, endDate: rangeEnd }),
+    }).then(r => r.json()).then(d => {
+      setGaLoad(false);
+      if (d && d.ok) setGa(d);
+      else setGaError(d && (d.message || d.error) || "Erreur GA4");
+    }).catch(e => { setGaLoad(false); setGaError(String(e)); });
+  }, [scopedClient && scopedClient.id, scopedClient && scopedClient.ga4_property_id, rangeStart, rangeEnd]);
+
+  // === UTM stats from agency_leads (always available, no GA4 required) ===
+  const leadsWithUtm = leads.filter(l => l.utm_source || l.utm_medium || l.utm_campaign);
+  const groupBy = (rows, key, valueKey) => {
+    const m = {};
+    rows.forEach(r => {
+      const k = (r[key] || "—").toLowerCase();
+      if (!m[k]) m[k] = { key: r[key] || "—", count: 0, won: 0 };
+      m[k].count++;
+      if (((r.statut || "").toLowerCase() === "gagné") || ((r.statut || "").toLowerCase() === "gagne")) m[k].won++;
+    });
+    return Object.values(m).sort((a, b) => b.count - a.count);
+  };
+  const bySource   = groupBy(leadsWithUtm, "utm_source");
+  const byMedium   = groupBy(leadsWithUtm, "utm_medium");
+  const byCampaign = groupBy(leadsWithUtm, "utm_campaign");
+  // Buckets for "type de demande" derived from UTM content / source convention
+  const byType = (() => {
+    const m = { tel: 0, formulaire: 0, autre: 0 };
+    leads.forEach(l => {
+      const c = (l.utm_content || "").toLowerCase();
+      if (c.includes("tel") || c.includes("call") || c.includes("phone") || l.telephone) m.tel++;
+      else if (c.includes("form") || c.includes("contact") || l.email) m.formulaire++;
+      else m.autre++;
+    });
+    return m;
+  })();
+
+  // Helper to read GA4 totals
+  function metricValue(report, idx) {
+    if (!report || !report.rows || !report.rows[0]) return 0;
+    const v = (report.rows[0].metricValues || [])[idx];
+    return v ? Number(v.value || 0) : 0;
+  }
+
+  const sessionsTotal  = metricValue(ga && ga.totals, 0);
+  const usersTotal     = metricValue(ga && ga.totals, 1);
+  const pageviewsTotal = metricValue(ga && ga.totals, 2);
+  const engagementRate = metricValue(ga && ga.totals, 3);
+  const avgSessDur     = metricValue(ga && ga.totals, 4);
+  const bounceRate     = metricValue(ga && ga.totals, 5);
+  const conversions    = metricValue(ga && ga.totals, 6);
+
+  return (
+    <div className="stack-lg fade-up">
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="globe" size={10}/> <EditableText value="Site web" storageKey="siteweb.hero.tag" tag="span"/></span>
+            <span className="pill live"><span className="dot"/> <EditableText value="GA4 + UTM tracking" storageKey="siteweb.hero.pill" tag="span"/></span>
+          </div>
+          <EditableText storageKey="siteweb.hero.title" value="Trafic & conversions du site" tag="div" className="hp-title" multiline/>
+          <EditableText storageKey="siteweb.hero.sub" value="Google Analytics 4 (sessions, users, conversions) + sources UTM des leads (téléphone / formulaire)." tag="div" className="hp-sub" multiline/>
+        </div>
+      </div>
+
+      {/* GA4 KPIs */}
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <EditableText value="Google Analytics 4" storageKey="siteweb.ga4.title" tag="div" className="card-title"/>
+            <EditableText value="Trafic du site sur la plage sélectionnée" storageKey="siteweb.ga4.sub" tag="div" className="card-sub"/>
+          </div>
+          {scopedClient && scopedClient.ga4_property_id
+            ? <span className="tag success">{scopedClient.ga4_property_id}</span>
+            : <span className="tag">Non connecté</span>}
+        </div>
+        <div className="card-body">
+          {!scopedClient && (
+            <div className="muted small" style={{ padding: 16, textAlign: "center" }}>
+              Sélectionne un client (admin → Clients → Voir le dashboard) pour afficher ses données GA4.
+            </div>
+          )}
+          {scopedClient && !scopedClient.ga4_property_id && (
+            <div className="muted small" style={{ padding: 16, textAlign: "center" }}>
+              Ce client n'a pas encore de propriété GA4 connectée. Va dans <strong>Admin → Clients → {scopedClient.nom} → Connecteurs API</strong> pour la lier.
+            </div>
+          )}
+          {scopedClient && scopedClient.ga4_property_id && gaLoading && (
+            <div className="muted small" style={{ padding: 16, textAlign: "center" }}>Chargement GA4…</div>
+          )}
+          {gaError && (
+            <div className="small" style={{ padding: 12, color: "var(--danger)" }}>Erreur GA4 : {gaError}</div>
+          )}
+          {scopedClient && scopedClient.ga4_property_id && ga && (
+            <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Sessions" storageKey="siteweb.ga4.label.0" tag="span"/></div><div className="kpi-value"><EditableText value={sessionsTotal.toLocaleString("fr-FR")} storageKey="siteweb.ga4.value.0" tag="span" className="mono"/></div></div>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Utilisateurs" storageKey="siteweb.ga4.label.1" tag="span"/></div><div className="kpi-value"><EditableText value={usersTotal.toLocaleString("fr-FR")} storageKey="siteweb.ga4.value.1" tag="span" className="mono"/></div></div>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Pages vues" storageKey="siteweb.ga4.label.2" tag="span"/></div><div className="kpi-value"><EditableText value={pageviewsTotal.toLocaleString("fr-FR")} storageKey="siteweb.ga4.value.2" tag="span" className="mono"/></div></div>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Conversions" storageKey="siteweb.ga4.label.3" tag="span"/></div><div className="kpi-value"><EditableText value={conversions.toLocaleString("fr-FR")} storageKey="siteweb.ga4.value.3" tag="span" className="mono"/></div></div>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Taux d'engagement" storageKey="siteweb.ga4.label.4" tag="span"/></div><div className="kpi-value"><EditableText value={(engagementRate*100).toFixed(1)} storageKey="siteweb.ga4.value.4" tag="span" className="mono"/><span className="unit">%</span></div></div>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Taux de rebond" storageKey="siteweb.ga4.label.5" tag="span"/></div><div className="kpi-value"><EditableText value={(bounceRate*100).toFixed(1)} storageKey="siteweb.ga4.value.5" tag="span" className="mono"/><span className="unit">%</span></div></div>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Durée moyenne" storageKey="siteweb.ga4.label.6" tag="span"/></div><div className="kpi-value"><EditableText value={(avgSessDur/60).toFixed(1)} storageKey="siteweb.ga4.value.6" tag="span" className="mono"/><span className="unit">min</span></div></div>
+              <div className="kpi"><div className="kpi-label"><EditableText value="Pages / session" storageKey="siteweb.ga4.label.7" tag="span"/></div><div className="kpi-value"><EditableText value={sessionsTotal > 0 ? (pageviewsTotal / sessionsTotal).toFixed(1) : "—"} storageKey="siteweb.ga4.value.7" tag="span" className="mono"/></div></div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Top sources GA4 */}
+      {ga && ga.sources && ga.sources.rows && ga.sources.rows.length > 0 && (
+        <div className="card">
+          <div className="card-head">
+            <EditableText value="Top sources de trafic (GA4)" storageKey="siteweb.gasrc.title" tag="div" className="card-title"/>
+          </div>
+          <table className="data">
+            <thead>
+              <tr>
+                <EditableText value="Source" tag="th" storageKey="siteweb.gasrc.col.0"/>
+                <EditableText value="Médium" tag="th" storageKey="siteweb.gasrc.col.1"/>
+                <EditableText value="Sessions" tag="th" storageKey="siteweb.gasrc.col.2"/>
+                <EditableText value="Utilisateurs" tag="th" storageKey="siteweb.gasrc.col.3"/>
+                <EditableText value="Conversions" tag="th" storageKey="siteweb.gasrc.col.4"/>
+              </tr>
+            </thead>
+            <tbody>
+              {ga.sources.rows.slice(0, 12).map((r, i) => (
+                <tr key={i}>
+                  <td><strong>{(r.dimensionValues && r.dimensionValues[0] && r.dimensionValues[0].value) || "—"}</strong></td>
+                  <td className="muted small">{(r.dimensionValues && r.dimensionValues[1] && r.dimensionValues[1].value) || "—"}</td>
+                  <td className="mono">{Number((r.metricValues && r.metricValues[0] && r.metricValues[0].value) || 0).toLocaleString("fr-FR")}</td>
+                  <td className="mono">{Number((r.metricValues && r.metricValues[1] && r.metricValues[1].value) || 0).toLocaleString("fr-FR")}</td>
+                  <td className="mono">{Number((r.metricValues && r.metricValues[2] && r.metricValues[2].value) || 0).toLocaleString("fr-FR")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* UTM tracking (depuis agency_leads) */}
+      <div className="grid g-2">
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <EditableText value="Demandes par type" storageKey="siteweb.demande.title" tag="div" className="card-title"/>
+              <EditableText value="Téléphone, formulaire ou autres canaux" storageKey="siteweb.demande.sub" tag="div" className="card-sub"/>
+            </div>
+          </div>
+          <div className="card-body grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <div className="kpi">
+              <div className="kpi-label"><EditableText value="Téléphone" storageKey="siteweb.demande.tel.label" tag="span"/></div>
+              <div className="kpi-value"><EditableText value={String(byType.tel)} storageKey="siteweb.demande.tel.value" tag="span" className="mono"/></div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label"><EditableText value="Formulaire" storageKey="siteweb.demande.form.label" tag="span"/></div>
+              <div className="kpi-value"><EditableText value={String(byType.formulaire)} storageKey="siteweb.demande.form.value" tag="span" className="mono"/></div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label"><EditableText value="Autre" storageKey="siteweb.demande.autre.label" tag="span"/></div>
+              <div className="kpi-value"><EditableText value={String(byType.autre)} storageKey="siteweb.demande.autre.value" tag="span" className="mono"/></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <EditableText value="Top sources UTM (leads)" storageKey="siteweb.utmsrc.title" tag="div" className="card-title"/>
+          </div>
+          <table className="data">
+            <thead><tr>
+              <EditableText value="utm_source" tag="th" storageKey="siteweb.utmsrc.col.0"/>
+              <EditableText value="Leads" tag="th" storageKey="siteweb.utmsrc.col.1"/>
+              <EditableText value="Gagnés" tag="th" storageKey="siteweb.utmsrc.col.2"/>
+            </tr></thead>
+            <tbody>
+              {bySource.length === 0 && <tr><td colSpan={3} className="muted small" style={{ padding: 16, textAlign: "center" }}>Aucun lead avec UTM source pour l'instant.</td></tr>}
+              {bySource.slice(0, 8).map((r, i) => (
+                <tr key={i}>
+                  <td><strong>{r.key}</strong></td>
+                  <td className="mono">{r.count}</td>
+                  <td className="mono">{r.won}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="grid g-2">
+        <div className="card">
+          <div className="card-head">
+            <EditableText value="Top campagnes UTM" storageKey="siteweb.utmcamp.title" tag="div" className="card-title"/>
+          </div>
+          <table className="data">
+            <thead><tr>
+              <EditableText value="utm_campaign" tag="th" storageKey="siteweb.utmcamp.col.0"/>
+              <EditableText value="Leads" tag="th" storageKey="siteweb.utmcamp.col.1"/>
+              <EditableText value="Gagnés" tag="th" storageKey="siteweb.utmcamp.col.2"/>
+            </tr></thead>
+            <tbody>
+              {byCampaign.length === 0 && <tr><td colSpan={3} className="muted small" style={{ padding: 16, textAlign: "center" }}>Aucune campagne UTM trackée.</td></tr>}
+              {byCampaign.slice(0, 8).map((r, i) => (
+                <tr key={i}>
+                  <td><strong>{r.key}</strong></td>
+                  <td className="mono">{r.count}</td>
+                  <td className="mono">{r.won}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card">
+          <div className="card-head">
+            <EditableText value="Top médiums UTM" storageKey="siteweb.utmmed.title" tag="div" className="card-title"/>
+          </div>
+          <table className="data">
+            <thead><tr>
+              <EditableText value="utm_medium" tag="th" storageKey="siteweb.utmmed.col.0"/>
+              <EditableText value="Leads" tag="th" storageKey="siteweb.utmmed.col.1"/>
+              <EditableText value="Gagnés" tag="th" storageKey="siteweb.utmmed.col.2"/>
+            </tr></thead>
+            <tbody>
+              {byMedium.length === 0 && <tr><td colSpan={3} className="muted small" style={{ padding: 16, textAlign: "center" }}>Pas encore de données UTM medium.</td></tr>}
+              {byMedium.slice(0, 8).map((r, i) => (
+                <tr key={i}>
+                  <td><strong>{r.key}</strong></td>
+                  <td className="mono">{r.count}</td>
+                  <td className="mono">{r.won}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Top pages */}
+      {ga && ga.pages && ga.pages.rows && ga.pages.rows.length > 0 && (
+        <div className="card">
+          <div className="card-head">
+            <EditableText value="Pages les plus consultées" storageKey="siteweb.pages.title" tag="div" className="card-title"/>
+          </div>
+          <table className="data">
+            <thead><tr>
+              <EditableText value="Page" tag="th" storageKey="siteweb.pages.col.0"/>
+              <EditableText value="Pages vues" tag="th" storageKey="siteweb.pages.col.1"/>
+              <EditableText value="Utilisateurs" tag="th" storageKey="siteweb.pages.col.2"/>
+            </tr></thead>
+            <tbody>
+              {ga.pages.rows.slice(0, 12).map((r, i) => (
+                <tr key={i}>
+                  <td className="mono small">{(r.dimensionValues && r.dimensionValues[0] && r.dimensionValues[0].value) || "—"}</td>
+                  <td className="mono">{Number((r.metricValues && r.metricValues[0] && r.metricValues[0].value) || 0).toLocaleString("fr-FR")}</td>
+                  <td className="mono">{Number((r.metricValues && r.metricValues[1] && r.metricValues[1].value) || 0).toLocaleString("fr-FR")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+window.ScreenSiteWeb = ScreenSiteWeb;
+
 function ScreenAutomations() {
   const STORAGE_KEY = "helpai_workflows";
   const [tab, setTab] = React.useState("all");
@@ -5967,6 +6277,7 @@ function buildNav(isAdmin) {
       { id: "customers",    label: "CRM",          icon: "customers" },
       { id: "gmb",          label: "Google Business", icon: "globe" },
       { id: "ads",          label: "Ads",          icon: "acquisition" },
+      { id: "siteweb",      label: "Site web",     icon: "globe" },
     ]},
   ];
   if (isAdmin) {
@@ -5984,6 +6295,7 @@ const SCREEN_META = {
   sales:        { title: "Ventes",         sub: "Performance commerciale et CA signé",    breadcrumb: "Tableau de bord" },
   ai:           { title: "Activité IA",    sub: "Actions réalisées et planifiées par l'agent IA", breadcrumb: "Intelligence" },
   ads:          { title: "Ads",            sub: "Google Ads, Meta Ads & Local Services — performance live", breadcrumb: "Écosystème" },
+  siteweb:      { title: "Site web",       sub: "Trafic Google Analytics & sources UTM (formulaire / tel)", breadcrumb: "Écosystème" },
   automations:  { title: "Automations",    sub: "Workflows et déclencheurs",               breadcrumb: "Intelligence" },
   customers:    { title: "CRM",            sub: "Leads entrants, prospects et clients",    breadcrumb: "Écosystème" },
   gmb:          { title: "Google Business", sub: "Activité live · posts, avis, rapports — alimenté par le bot Telegram", breadcrumb: "Écosystème" },
@@ -6172,6 +6484,7 @@ function App({ user, isAdmin, displayName, userClient, onLogout }) {
       case "automations": return isAdmin ? <ScreenAutomations/> : <ScreenOverview/>;
       case "customers":   return <ScreenCustomers/>;
       case "gmb":         return <ScreenGMB/>;
+      case "siteweb":     return <ScreenSiteWeb/>;
       case "architecture":return <ScreenArchitecture/>;
       case "clients":     return isAdmin ? <ScreenClientsAdmin onViewClient={viewAsClient} onRefresh={refresh} tick={tick}/> : <ScreenOverview/>;
       case "account":     return <ScreenAccount user={user} userClient={userClient} isAdmin={isAdmin} onRefresh={refresh}/>;
