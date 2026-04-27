@@ -2304,6 +2304,9 @@ function ScreenOverview() {
         </div>
       </div>
 
+      {/* ── Funnel + stats par source — données réelles agency_leads ── */}
+      <LeadFunnelAndSourceStats/>
+
       <div className="grid g-2-1">
         <div className="card">
           <div className="card-head">
@@ -2549,9 +2552,184 @@ function KpiCard({ label, value, unit, trend, dir, storageNs }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Funnel + stats par source — calculé sur les données réelles agency_leads.
+// Utilise window.__HELPAI_LEADS_ROWS (rempli par AuthGate au boot).
+// ─────────────────────────────────────────────────────────────────────────────
+const LEAD_PROGRESSED = {
+  qualifie:           ["qualifie", "contacté", "rdv_pris", "rdv_effectue", "devis_a_envoyer", "devis_envoye", "devis_signe", "chantier_en_cours", "chantier_termine"],
+  rdv_planifie:       ["rdv_pris", "rdv_effectue", "devis_a_envoyer", "devis_envoye", "devis_signe", "chantier_en_cours", "chantier_termine"],
+  devis_envoye:       ["devis_envoye", "devis_signe", "chantier_en_cours", "chantier_termine"],
+  signe:              ["devis_signe", "chantier_en_cours", "chantier_termine"],
+  chantier_termine:   ["chantier_termine"],
+};
+const SOURCE_LABEL = { google_ads: "Google Ads", meta: "Meta Ads", gmb: "GMB", site: "Site web", appel: "Appel direct", lsa: "LSA", autre: "Autre / Referral" };
+const SOURCE_COLOR = {
+  google_ads: "oklch(0.80 0.120 60)",
+  meta:       "oklch(0.74 0.155 55)",
+  gmb:        "oklch(0.78 0.13 155)",
+  site:       "oklch(0.72 0.13 220)",
+  appel:      "oklch(0.65 0.15 310)",
+  lsa:        "oklch(0.70 0.12 240)",
+  autre:      "var(--text-3)",
+};
+
+function LeadFunnelAndSourceStats() {
+  const allLeads = window.__HELPAI_LEADS_ROWS || [];
+
+  const total       = allLeads.length;
+  const qualifies   = allLeads.filter(l => l.qualifie || LEAD_PROGRESSED.qualifie.includes(l.statut)).length;
+  const rdvPris     = allLeads.filter(l => !!l.rdv_datetime || LEAD_PROGRESSED.rdv_planifie.includes(l.statut)).length;
+  const devisEnv    = allLeads.filter(l => !!l.devis_envoye_le || LEAD_PROGRESSED.devis_envoye.includes(l.statut)).length;
+  const signes      = allLeads.filter(l => LEAD_PROGRESSED.signe.includes(l.statut)).length;
+  const chantierOk  = allLeads.filter(l => l.statut === "chantier_termine").length;
+  const avis        = allLeads.filter(l => !!l.satisfaction_note).length;
+
+  const STEPS = [
+    { label: "Reçus",     count: total,      color: "var(--text-3)" },
+    { label: "Qualifiés", count: qualifies,  color: "var(--info)" },
+    { label: "RDV pris",  count: rdvPris,    color: "var(--accent)" },
+    { label: "Devis env.",count: devisEnv,   color: "var(--accent-2)" },
+    { label: "Signés",    count: signes,     color: "var(--success)" },
+    { label: "Chantier OK", count: chantierOk, color: "var(--success)" },
+    { label: "Avis",      count: avis,       color: "oklch(0.65 0.15 310)" },
+  ];
+  const max = Math.max(1, ...STEPS.map(s => s.count));
+
+  // Stats par source
+  const sourceBuckets = {};
+  for (const l of allLeads) {
+    const src = l.source || "autre";
+    if (!sourceBuckets[src]) sourceBuckets[src] = { total: 0, signed: 0, ca: 0 };
+    sourceBuckets[src].total++;
+    if (LEAD_PROGRESSED.signe.includes(l.statut)) sourceBuckets[src].signed++;
+    if (l.montant_chantier) sourceBuckets[src].ca += l.montant_chantier;
+  }
+  const sourceRows = Object.entries(sourceBuckets)
+    .map(([src, s]) => ({
+      src,
+      label: SOURCE_LABEL[src] || src,
+      color: SOURCE_COLOR[src] || "var(--text-3)",
+      total: s.total,
+      signed: s.signed,
+      ca: s.ca / 100,
+      ticket: s.signed > 0 ? Math.round(s.ca / 100 / s.signed) : 0,
+      winRate: s.total > 0 ? (s.signed / s.total) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  if (total === 0) {
+    return (
+      <div className="card">
+        <div className="card-head"><div className="card-title">📊 Funnel & sources</div></div>
+        <div className="card-body" style={{ textAlign: "center", padding: 32 }}>
+          <div className="muted small">Aucun lead pour l'instant.</div>
+          <div className="muted small" style={{ marginTop: 4, fontSize: 11 }}>
+            Le funnel s'affichera dès que tu auras des leads dans <code className="code">agency_leads</code>.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid g-2" style={{ gap: 16 }}>
+      {/* ── FUNNEL ── */}
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <div className="card-title">📊 Funnel de conversion</div>
+            <div className="card-sub">{total} leads en base — taux de conversion entre étapes</div>
+          </div>
+        </div>
+        <div className="card-body stack-md">
+          {STEPS.map((s, i) => {
+            const w     = Math.max(2, (s.count / max) * 100);
+            const prev  = i > 0 ? STEPS[i - 1].count : 0;
+            const dropPct = (i > 0 && prev > 0) ? Math.round(((prev - s.count) / prev) * 100) : null;
+            const convPct = (i > 0 && prev > 0) ? Math.round((s.count / prev) * 100) : null;
+            return (
+              <div key={s.label} className="stack-xs">
+                <div className="row between" style={{ fontSize: 12.5 }}>
+                  <span style={{ fontWeight: 500 }}>{s.label}</span>
+                  <span className="row" style={{ gap: 8 }}>
+                    {convPct !== null && (
+                      <span className="mono small" style={{ color: convPct >= 50 ? "var(--success)" : convPct >= 20 ? "var(--accent)" : "var(--danger)" }}>
+                        {convPct}% ({dropPct >= 0 ? "−" : "+"}{Math.abs(dropPct || 0)}%)
+                      </span>
+                    )}
+                    <span className="mono" style={{ fontWeight: 700, fontSize: 14 }}>{s.count}</span>
+                  </span>
+                </div>
+                <div style={{ height: 26, borderRadius: 6, background: "var(--surface-2)", overflow: "hidden", position: "relative" }}>
+                  <div style={{
+                    width:  w + "%",
+                    height: "100%",
+                    background: "linear-gradient(90deg, " + s.color + ", " + s.color + " 60%, transparent)",
+                    opacity: 0.85,
+                    borderRadius: 6,
+                    transition: "width 0.3s",
+                  }}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── STATS PAR SOURCE ── */}
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <div className="card-title">📍 Performance par source</div>
+            <div className="card-sub">Leads, signés, CA généré, ticket moyen, win rate</div>
+          </div>
+        </div>
+        <div style={{ padding: 0 }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Leads</th>
+                <th>Signés</th>
+                <th>CA</th>
+                <th>Ticket moy.</th>
+                <th>Win rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sourceRows.map(r => (
+                <tr key={r.src}>
+                  <td>
+                    <span className="row" style={{ gap: 8 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 3, background: r.color }}/>
+                      <strong>{r.label}</strong>
+                    </span>
+                  </td>
+                  <td className="mono">{r.total}</td>
+                  <td className="mono">{r.signed}</td>
+                  <td className="mono">{r.ca > 0 ? r.ca.toLocaleString("fr-FR") + " €" : "—"}</td>
+                  <td className="mono">{r.ticket > 0 ? r.ticket.toLocaleString("fr-FR") + " €" : "—"}</td>
+                  <td className="mono" style={{ color: r.winRate > 30 ? "var(--success)" : r.winRate > 10 ? "var(--accent)" : "var(--text-3)" }}>
+                    {r.winRate.toFixed(1)}%
+                  </td>
+                </tr>
+              ))}
+              {sourceRows.length === 0 && (
+                <tr><td colSpan={6} className="muted small" style={{ textAlign: "center", padding: 16 }}>Aucune donnée source.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 window.ScreenOverview = ScreenOverview;
 window.ScreenAcquisition = ScreenAcquisition;
 window.KpiCard = KpiCard;
+window.LeadFunnelAndSourceStats = LeadFunnelAndSourceStats;
 
   </script>
 
