@@ -1,285 +1,233 @@
-# Spec — Refonte de la page Workflows (option A)
+# Spec — Workflows / Automations HelpAi Agency
 
-> Document de continuité pour reprendre le chantier sur un autre poste.
-> Créé le 2026-04-27. Branche `main`. Dernier commit lié : `1c41bfd`.
+> Document vivant. Dernière mise à jour : 2026-04-27 (post audit edge functions).
+> Branche `main`. Lire ce fichier avant toute reprise sur le chantier workflows.
 
 ---
 
-## Contexte
+## 🧠 Audit du code existant — l'engine est déjà à ~80%
 
-L'onglet **Automations → Workflows** du dashboard est actuellement un **démo localStorage** : "Créer un workflow" crée juste une ligne `{name, trigger, status}` stockée dans `localStorage.helpai_workflows` avec des `EditableText` libres. Le bouton "Activer" change un badge mais **rien ne s'exécute**.
+Après lecture des edge functions Supabase (`agency-automation-engine`, `agency-wa-webhook`, `agency-lead-intake`) et inspection du schéma `public`, **la majorité du moteur conversationnel est déjà déployée**. Ce qu'il reste à faire est plus une **couche d'orchestration + canaux** qu'une refonte.
 
-En parallèle, **toutes les edge functions Supabase nécessaires existent déjà** et tournent en prod :
+### Ce qui FONCTIONNE déjà en prod
 
-| Edge function | Rôle |
+| Workflow utilisateur | Implémenté dans | Statut |
+|---|---|---|
+| Création lead + détection source | `agency-lead-intake` | ✅ |
+| **#1** SMS qualification (proprio? prestation? urgence?) | `agency-automation-engine` AUTO 1 → envoie via WA | ✅ logique OK, ❌ canal SMS à ajouter |
+| **#2** Notif lead chaud prio (proprio + urgent) | `agency-wa-webhook` étape 3 → calcule `priorite='haute'` + notif WA artisan | ✅ |
+| **#3** Appel manqué → SMS prospect + notif artisan | `agency-automation-engine` AUTO 2 (lit `lead.appel_manque`) | ⚠️ webhook voix manquant |
+| **#4** Menu post-appel artisan (RDV/Devis/Perdu/Rappel) | `agency-automation-engine` AUTO 3 — boutons WA | ✅ |
+| **#5** Création RDV via parsing date | `agency-wa-webhook` (`parseRdvDate` via Claude Haiku) | ✅ |
+| **#6** Rappels RDV J-1, 2h, 30 min + confirmation | `agency-automation-engine` AUTO 4 | ✅ |
+| **#6 bis** Détection risque no-show + check post-RDV | `agency-automation-engine` AUTO 4 | ✅ |
+| **#7** Séquence no-show (immédiat / 2h / J+1) | `agency-automation-engine` AUTO 5 | ✅ |
+| **#8** Relances devis prospect J+2/J+5/J+15 | `agency-automation-engine` AUTO 6 | ✅ |
+| **#8 bis** Suivi devis artisan | `agency-automation-engine` AUTO 7 (boutons J+7) | ✅ |
+| **#9** Demande montant chantier (1× après signature) | `agency-wa-webhook` (saisie texte libre + parsing) | ✅ |
+| **#10** Confirmation chantier terminé | `agency-automation-engine` AUTO 9 (à 30j) + boutons | ✅ |
+| **#11** Satisfaction post-chantier (note 1-5 → avis Google ou alerte artisan) | `agency-automation-engine` AUTO 8 + `agency-wa-webhook` parsing | ✅ |
+| **#12** Relances internes artisan (24h / 48h / 30j) | `agency-automation-engine` AUTO 9 | ✅ |
+| **#13** Bilan mensuel CA + chantiers + panier + sources | `agency-bilan-mensuel` + table `agency_ca_mensuel` | ⚠️ pas vérifié si wired au cron |
+
+### Tables déjà en place (rien à créer pour la donnée métier)
+
+| Table | Rôle |
 |---|---|
-| `agency-automation-engine` | orchestrateur (à utiliser comme moteur) |
-| `agency-wa-relances` | moteur de relance leads SMS/WhatsApp |
-| `agency-wa-send` / `agency-wa-webhook` | envoi/réception WhatsApp |
-| `agency-notify` | dispatcher SMS / WhatsApp / Telegram |
-| `agency-lead-intake` | capture des leads entrants |
-| `agency-bilan-mensuel` | bilan mensuel auto |
-| `gmb-autopilot-review-reply` | auto-réponse aux avis Google |
-| `gmb-autopilot-post-generator` + `gmb-post-scheduler` | publications GMB programmées |
-| `gmb-report-generator` | rapport de performance fiche Google |
-| `agency-blog-generator` + `blog-publish` | génération + publication d'articles SEO |
-
-**Objectif** : connecter la page UI à ces fonctions via un catalogue de templates et un vrai moteur d'instances par client.
+| `agency_clients` | inclut `whatsapp_phone/_actif`, `telegram_chat_id/_actif`, `canal_notif`, `avis_google_url` |
+| `agency_leads` | tous les champs lifecycle : `proprietaire`, `prestation`, `urgence`, `priorite`, `qualifie`, `rdv_datetime`+flags, `devis_envoye_le`+flags, `montant_chantier`, `satisfaction_note`, `appel_manque`, `appel_repondu_le`, `sms_etape`, `relance_artisan_*` |
+| `agency_appels` | log appels (`type`, `duree_sec`, `traite`, `sms_envoye`) |
+| `agency_relances` | log relances |
+| `agency_lead_conversations` | toutes les conversations (in/out, prospect/artisan) |
+| `agency_wa_messages` | log WA brut |
+| `agency_automation_log` | runs anti-doublons (unique key sur `lead_id+type`) |
+| `agency_ca_mensuel` | CA agrégé mensuel par source (`ca_site`, `ca_google_ads`, `ca_meta`, `ca_appel`, `ca_lsa`, `ca_autre` + comptes chantiers) |
+| `agency_kpis` | KPIs synthèse multi-sources |
 
 ---
 
-## 1. Tables Supabase à créer
+## 🎯 Décisions produit validées avec Guillaume
 
-### `agency_workflow_templates` (catalogue, seed read-only)
-
-| champ | type | rôle |
+| # | Décision | Réponse |
 |---|---|---|
-| `slug` | text PK | identifiant : `relance_lead_no_reply`, `auto_reply_avis`, etc. |
-| `nom` | text | nom affiché |
-| `description` | text | une phrase |
-| `categorie` | text | `relance` / `acquisition` / `avis` / `reporting` / `gmb` / `blog` |
-| `icon` | text | nom d'icône Lucide (`zap`, `bell`, `mail`, etc.) |
-| `trigger_type` | text | `lead.created` / `lead.statut_change` / `gmb.review.received` / `cron` |
-| `executor_function` | text | nom de la edge function appelée |
-| `config_schema` | jsonb | décrit les champs configurables (cf. § 3) |
-| `default_config` | jsonb | valeurs par défaut |
-| `actif` | bool | template disponible dans le catalogue |
+| 1 | Catalogue workflows | 13 workflows (cycle de vie complet du lead) |
+| 2 | Multi-client | Activation libre par client (1 ou N artisans en même temps) |
+| 3 | Bouton « Tester » | Oui — par défaut **dry-run** (rendu sans envoi), avec toggle « envoyer pour de vrai » sur numéro test |
+| 4 | Variables messages | `{{nom}} {{prestation}} {{ville}} {{telephone_artisan}}` à itérer pendant les tests |
+| 5 | Permissions | Admin = config + activation. Client = lecture seule des workflows actifs sur son compte |
 
-### `agency_workflows` (instances par client)
+### Canaux de communication
 
-| champ | type | rôle |
+| Acteur | Canal sortant | Canal entrant |
 |---|---|---|
-| `id` | uuid PK | |
-| `client_id` | uuid → `agency_clients` | propriétaire |
-| `template_slug` | text → `agency_workflow_templates.slug` | |
-| `nom` | text | nom personnalisable |
-| `statut` | text | `draft` / `active` / `paused` |
-| `config` | jsonb | la config réelle de cette instance |
-| `last_run_at` | timestamptz | |
-| `next_run_at` | timestamptz | pour les workflows cron |
-| `runs_count` | int | total |
-| `success_count` | int | |
-| `error_count` | int | |
-| `created_at`, `updated_at` | timestamptz | |
+| **Prospect / lead final** | **SMS** uniquement (Twilio) | SMS (Twilio) |
+| **Artisan (client agence)** | WhatsApp **ou** Telegram (selon `agency_clients.canal_notif`) | WA / Telegram |
 
-### `agency_workflow_runs` (log d'exécution)
+### Infrastructure téléphonie validée — **Twilio**
 
-| champ | type | rôle |
-|---|---|---|
-| `id` | uuid PK | |
-| `workflow_id` | uuid → `agency_workflows` | |
-| `client_id` | uuid → `agency_clients` | dénormalisé pour filtrer |
-| `started_at`, `finished_at` | timestamptz | |
-| `statut` | text | `running` / `success` / `error` |
-| `payload` | jsonb | l'événement reçu |
-| `result` | jsonb | retour de la edge function |
-| `error_message` | text | si statut=error |
+- Provider unique : **Twilio** (SMS + Voice + numéros de tracking)
+- 2 numéros par artisan :
+  - **Numéro principal** : exposé sur site web + Google Business + papier à entête → cohérence NAP locale
+  - **Numéro Ads** : exposé sur Meta Ads + Google Ads + landing pages → tag `ads_*` automatique
+- Les 2 numéros forwardent vers le **téléphone perso de l'artisan** (TwiML `<Dial>`)
+- Webhook missed call → remplit `agency_appels` + `agency_leads.appel_manque=true`
+- Webhook SMS inbound → parse réponses prospect (qualification, confirmation RDV, note satisfaction)
 
-Cette table alimente déjà le **Journal des automations** (page admin existante via `agency_automation_log` — à fusionner ou à laisser séparé selon usage).
-
-### `agency_pending_actions` (file d'attente pour les délais)
-
-Pour les relances J+1, J+3, J+7 il faut stocker des actions à exécuter plus tard.
-
-| champ | type | rôle |
-|---|---|---|
-| `id` | uuid PK | |
-| `workflow_id` | uuid → `agency_workflows` | |
-| `run_at` | timestamptz | quand l'exécuter |
-| `payload` | jsonb | l'événement initial |
-| `step` | int | étape (1 = J+1, 2 = J+3, 3 = J+7) |
-| `statut` | text | `pending` / `done` / `cancelled` (cancelled si lead a répondu) |
+**Coût estimé / artisan / mois** : ~12 € (2 numéros 2 € + ~100 SMS × 6,5c + ~50 appels × 2 min × 1c)
 
 ---
 
-## 2. Le moteur (`agency-automation-engine`)
+## 🚧 Ce qu'il reste à construire
 
-3 modes d'invocation :
+### A. Couche Twilio (CRITIQUE — manquante)
 
-### a) Trigger DB (événements)
+| Edge function | Rôle | Priorité |
+|---|---|---|
+| `agency-sms-send` | Envoi SMS via Twilio API (utilisé par engine quand destinataire = prospect) | P0 |
+| `agency-sms-webhook` | Réception SMS (Twilio POST) → route vers logique de `agency-wa-webhook` (qualif / confirmation / satisfaction) | P0 |
+| `agency-voice-webhook` | Statut appel Twilio (forward + missed call) → écrit dans `agency_appels` + flag `lead.appel_manque` | P0 |
+| `agency-twilio-provision` | Création/assignation numéros par client (1 principal + 1 ads) | P1 |
 
-Trigger PostgreSQL sur :
-- `INSERT INTO agency_leads` → appelle l'engine avec `{event: "lead.created", lead_id}`
-- `UPDATE agency_leads SET statut=...` → appelle avec `{event: "lead.statut_change", lead_id, old_statut, new_statut}`
-- `INSERT INTO agency_reviews` → appelle avec `{event: "gmb.review.received", review_id}`
+### B. Refactor de l'engine pour le multi-canal
 
-L'engine cherche dans `agency_workflows` toutes les instances `active` du bon template pour ce `client_id`, puis :
-- Workflow immédiat → appelle directement la edge function executor
-- Workflow à délais → insère N lignes dans `agency_pending_actions` (une par étape)
+Le moteur actuel envoie **tout via WhatsApp**, y compris au prospect. Il faut wrapper les appels send :
 
-### b) Cron toutes les 5 min (`pg_cron`)
+```ts
+async function sendToProspect(lead, msg) {
+  // toujours SMS via Twilio
+  await fetch(SUPABASE_URL + '/functions/v1/agency-sms-send', { body: { to: lead.telephone, msg } });
+}
 
-L'engine lit :
-- `agency_pending_actions WHERE statut='pending' AND run_at <= now()` → exécute et marque `done` (ou `cancelled` si annulé)
-- `agency_workflows WHERE trigger_type='cron' AND statut='active' AND next_run_at <= now()` → exécute, recalcule `next_run_at`
-
-### c) Bouton "Exécuter maintenant" (manuel)
-
-Appel HTTP direct depuis l'UI avec payload de test → exécute en mode dry-run (n'envoie rien réellement, retourne le rendu) ou en mode réel selon paramètre.
-
-À chaque exécution : ligne dans `agency_workflow_runs` (success/error + message complet) + incrément des counters sur `agency_workflows`.
-
----
-
-## 3. Catalogue de 8 templates
-
-| # | slug | trigger | executor | config exposée |
-|---|---|---|---|---|
-| 1 | `relance_lead_no_reply` | `lead.created` | `agency-wa-relances` | canal (sms/wa/tg), délais (array de jours, ex `[1,3,7]`), 1 message par étape, `stop_si_repondu` |
-| 2 | `notif_artisan_nouveau_lead` | `lead.created` | `agency-notify` | canal, template message, `urgent_seulement` |
-| 3 | `bienvenue_lead_qualifie` | `lead.statut → qualifie` | `agency-notify` | canal, délai (heures), message |
-| 4 | `recovery_no_show` | `lead.statut → no_show` | `agency-wa-relances` | canal, délai, message d'excuse + lien re-RDV |
-| 5 | `auto_reply_avis_google` | `gmb.review.received` | `gmb-autopilot-review-reply` | ton (chaleureux/pro), seuil note minimum, signature |
-| 6 | `gmb_post_hebdo` | `cron` | `gmb-autopilot-post-generator` | jour de semaine, heure, thèmes (array) |
-| 7 | `bilan_mensuel_auto` | `cron` | `agency-bilan-mensuel` | jour du mois (1–28), destinataires email (array), inclure factures |
-| 8 | `blog_seo_auto` | `cron` | `agency-blog-generator` → `blog-publish` | fréquence (hebdo/mensuel), mots-clés (array), tonalité |
-
-### Format du `config_schema`
-
-Pour générer dynamiquement le formulaire dans le drawer. Exemple pour template #1 :
-
-```json
-{
-  "fields": [
-    {
-      "key": "canal",
-      "label": "Canal",
-      "type": "radio",
-      "options": ["sms", "whatsapp", "telegram"],
-      "default": "whatsapp",
-      "required": true
-    },
-    {
-      "key": "delais_jours",
-      "label": "Délais des relances (en jours)",
-      "type": "chips_int",
-      "default": [1, 3, 7],
-      "min": 1,
-      "max": 30
-    },
-    {
-      "key": "messages",
-      "label": "Messages par étape",
-      "type": "textarea_per_step",
-      "depends_on": "delais_jours",
-      "variables": ["nom", "prestation", "ville", "telephone_artisan"]
-    },
-    {
-      "key": "stop_si_repondu",
-      "label": "Arrêter si le lead répond",
-      "type": "bool",
-      "default": true
-    }
-  ]
+async function sendToArtisan(client, msg, buttons?) {
+  // selon canal_notif : 'whatsapp' (défaut) ou 'telegram'
+  if (client.canal_notif === 'telegram') {
+    await sendTelegram(client.telegram_chat_id, msg, buttons);
+  } else {
+    await sendWaText(client.whatsapp_phone, msg);
+    if (buttons) await sendWaButtons(client.whatsapp_phone, msg, buttons);
+  }
 }
 ```
 
-Types de champs supportés : `text`, `textarea`, `int`, `num`, `bool`, `radio`, `select`, `multi_select`, `chips_int`, `email_list`, `time`, `cron`, `textarea_per_step`.
+→ remplacer `sendText(prospectPhone, ...)` partout dans l'engine par `sendToProspect(lead, ...)`
+→ remplacer `sendText(artisanPhone, ...)` par `sendToArtisan(client, ...)`
+
+### C. Toggles par client (activer/désactiver chaque workflow)
+
+#### Nouvelle table : `agency_workflow_settings`
+
+```sql
+create table public.agency_workflow_settings (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references public.agency_clients(id) on delete cascade,
+  workflow_slug text not null,    -- 'sms_qualification_prospect', 'rdv_rappel_j1', etc.
+  enabled boolean not null default true,
+  config jsonb default '{}'::jsonb,  -- ex: { delais_jours: [2, 5, 15] } ou ton message custom
+  updated_at timestamptz default now(),
+  unique(client_id, workflow_slug)
+);
+```
+
+13 slugs prédéfinis (1 par AUTO de l'engine + workflows externes) :
+
+| slug | label UI | défaut |
+|---|---|---|
+| `sms_qualification_prospect` | SMS qualification (3 questions) | activé |
+| `notif_lead_chaud_prio` | Notif PRIO sur lead proprio + urgent | activé |
+| `appel_manque_relance` | SMS prospect + notif artisan sur appel manqué | activé |
+| `post_appel_menu` | Menu artisan 10 min après appel | activé |
+| `rdv_creation_via_sms` | Création RDV via parsing date | activé |
+| `rdv_rappels_prospect` | Rappels J-1 / 2h / 30 min | activé |
+| `rdv_check_no_show` | Vérif no-show post-RDV | activé |
+| `no_show_relances` | Séquence no-show 0 / 2h / J+1 | activé |
+| `devis_relances_prospect` | Relances devis J+2 / J+5 / J+15 | activé |
+| `devis_suivi_artisan` | Boutons signé / pas encore / perdu (J+7) | activé |
+| `montant_demande_post_signature` | Demande montant après signature | activé |
+| `satisfaction_post_chantier` | Note 1-5 + avis Google / alerte | activé |
+| `relances_internes_artisan` | Rappels artisan 24h / 48h / 30j | activé |
+| `bilan_mensuel_auto` | Bilan CA fin de mois SMS + email | activé |
+
+Dans l'engine, gate chaque AUTO :
+```ts
+if (!await isWorkflowEnabled(clientId, 'sms_qualification_prospect')) continue;
+```
+
+### D. UI Workflows refaite (`dashboard.html`)
+
+#### Pour l'admin (vue Agence)
+- **Vue d'ensemble** : 4 KPIs réels (workflows actifs / runs 30j / taux succès / temps gagné)
+- **Liste des 14 templates** : 1 ligne par workflow avec :
+  - Nom + description
+  - Déclencheur en français
+  - Toggle global (activer pour tous les artisans)
+  - Bouton "Configurer par client" → modal avec liste artisans + checkbox d'activation par artisan
+  - Bouton "Tester" → modal avec lead simulé + dry-run / send réel
+- **Historique runs** : table `agency_automation_log` avec filtres par client / workflow / statut
+
+#### Pour le client (artisan)
+- **Vue lecture seule** des workflows activés sur son compte
+- Pas de toggle, pas de config
+
+### E. Triggers DB + cron (à valider/créer)
+
+À vérifier (peut-être déjà en place) :
+- `pg_cron` job toutes les 5 min → POST `agency-automation-engine`
+- Trigger PostgreSQL sur `INSERT/UPDATE agency_leads` → POST engine immédiat (pour réactivité)
+
+À créer :
+- Trigger sur `INSERT agency_appels WHERE traite=false AND duree_sec=0` → POST engine (missed call)
 
 ---
 
-## 4. UI — page Workflows refaite
+## 📋 Plan de découpage en commits
 
-### a) Header — KPIs réels
+Chaque étape est testable individuellement.
 
-4 cartes lues depuis Supabase (plus localStorage) :
-- Workflows actifs (count `agency_workflows WHERE statut='active'`)
-- Exécutions 30j (count `agency_workflow_runs WHERE started_at > now() - interval '30 days'`)
-- Taux de succès % (success / total runs sur 30j)
-- Temps gagné h (heuristique : 5 min/run réussi)
-
-### b) Bouton "+ Ajouter un workflow" → Modal Catalogue
-
-Grille de cartes des 8 templates classées par catégorie. Chaque carte : icône, nom, description courte, badge de trigger.
-Click sur carte → ouvre le **Drawer de config**.
-
-### c) Drawer de configuration
-
-Formulaire **généré dynamiquement** depuis `template.config_schema` :
-- Sélecteur de **client** (admin : multi-client possible avec "Appliquer à tous")
-- Champs dynamiques selon le schema
-- Statut initial : `draft` (test) / `active`
-- Bouton **"Tester maintenant"** → mode dry-run (cf. § Q3)
-- **Enregistrer** → INSERT dans `agency_workflows`
-
-### d) Liste des workflows configurés
-
-Cartes ou tableau :
-- Icône + nom du template + nom custom
-- Client (si admin sans filtre)
-- Résumé du trigger en français : *"Quand un lead arrive, relance par WhatsApp à J+1, J+3, J+7"*
-- Dernière exécution (vert/rouge) + Prochaine (pour cron)
-- Toggle Actif / Pause
-- Bouton ▶ Exécuter / ✏ Éditer / 🗑 Supprimer
-
-### e) Modal détail d'un workflow
-
-- Config en lecture/édition
-- **Historique des runs** (depuis `agency_workflow_runs`) avec payload + erreur déroulables
-
-### f) Filtres
-
-Chips : Tous / Actifs / Pause / Brouillons. Plus filtre par client (admin), par catégorie de template.
+| Étape | Description | Effort | Bloquant |
+|---|---|---|---|
+| **0** | ✅ Audit + spec (ce document) | fait | — |
+| **1** | Créer table `agency_workflow_settings` + seed 14 lignes par client | 1h | aucun |
+| **2** | Edge function `agency-sms-send` + `agency-sms-webhook` (Twilio outbound + inbound) | 3h | crédentiels Twilio |
+| **3** | Edge function `agency-voice-webhook` (missed call detection) + alimentation `agency_appels` | 2h | crédentiels Twilio + numéros provisionnés |
+| **4** | Refactor `agency-automation-engine` : `sendToProspect`/`sendToArtisan` + gating workflows + support Telegram | 3h | étape 2 |
+| **5** | UI dashboard — Liste workflows + toggle global + toggle par client + tester | 4h | étape 1 |
+| **6** | UI dashboard — Modal historique runs (lit `agency_automation_log` + `agency_lead_conversations`) | 2h | aucun |
+| **7** | Edge function `agency-twilio-provision` (création numéros + association client + redirection vers tél perso) | 3h | étape 2 |
+| **8** | Configurer `pg_cron` + trigger PostgreSQL sur `agency_leads` (si manquant) | 1h | aucun |
+| **9** | Tests E2E + ajustements messages / variables | itératif | toutes |
 
 ---
 
-## 5. ⚠️ Inconnu à vérifier avant de coder
+## 🔐 Secrets à fournir (Supabase Edge Functions)
 
-Le **format de payload** attendu par chaque edge function existante n'a pas encore été lu. Avant de coder l'engine, lire :
+```
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+TWILIO_PHONE_FROM_DEFAULT  (le N° principal Twilio par défaut, override-able par client)
+```
 
-- `agency-wa-relances/index.ts` → comprendre comment elle attend les délais et les messages
-- `agency-notify/index.ts` → format canal + message
-- `gmb-autopilot-review-reply/index.ts` → format payload et options
-- `agency-bilan-mensuel/index.ts` → comment elle est appelée
-- `agency-automation-engine/index.ts` → ce qu'elle fait déjà aujourd'hui
-
-⇒ Adapter `executor_function` + le mapping de config pour chaque template.
-
----
-
-## 6. Questions ouvertes à valider AVANT le code
-
-1. **Le catalogue à 8 templates** te convient ou tu veux ajouter / supprimer / renommer ?
-2. **Multi-client en une fois** : activer un même workflow sur tous les clients d'un coup, ou un par un ?
-3. **"Tester maintenant"** : envoi réel sur un numéro de test, ou dry-run qui montre juste ce qui *aurait* été envoyé ?
-4. **Variables dans messages** : `{{nom}}, {{prestation}}, {{ville}}` suffisent ou il en faut d'autres (`montant_chantier`, `urgence`, `telephone_artisan`…) ?
-5. **Permissions** : seul l'admin agence configure, ou le client final peut aussi voir / pauser ses workflows ?
+Déjà présents (utilisés par l'existant) :
+```
+WA_ACCESS_TOKEN, WA_PHONE_NUMBER_ID, WA_VERIFY_TOKEN, ANTHROPIC_API_KEY,
+RESEND_API_KEY, TELEGRAM_BOT_TOKEN, FCM_SERVER_KEY, STRIPE_SECRET_KEY
+```
 
 ---
 
-## 7. Plan de découpage en commits
+## ⚠️ À valider AVANT étape 2
 
-Pour pouvoir tester au fur et à mesure :
-
-1. **Migration BDD** : créer les 4 tables + RLS + seed des 8 templates
-2. **Edge function engine** : étendre `agency-automation-engine` (modes trigger/cron/manual + mapping vers executors)
-3. **Triggers PostgreSQL** : sur `agency_leads` (insert + update statut) et sur les avis
-4. **pg_cron schedule** : tick toutes les 5 min
-5. **UI catalogue** : modal de sélection des templates
-6. **UI drawer config** : form dynamique depuis `config_schema`
-7. **UI liste + détail** : remplacement de la page localStorage actuelle
-8. **UI historique runs** : modal détail + filtres
-
-Chaque étape est mergeable indépendamment et testable.
+1. **Compte Twilio créé** par Guillaume + ajout des 3 secrets dans Supabase
+2. **Achat de 2 numéros français** Twilio pour test (1 principal + 1 ads) → ~2 €/mois
+3. **Confirmation politique** : artisan reçoit-il **TOUS** les messages via son canal préféré (`canal_notif`), ou seulement les notifs prio en Telegram et le quotidien en WA ? → on part sur **un seul canal par artisan, configuré dans `agency_clients.canal_notif`**.
 
 ---
 
-## État du code à la dernière session (2026-04-27)
-
-- Branche : `main`
-- Dernier commit : `1c41bfd` — *fix: Modifier no longer freezes the page (lazy contentEditable)*
-- Page actuelle Workflows : `dashboard.html:6560` (`function ScreenAutomations`) — à remplacer
-- Page Journal des automations : `dashboard.html:6253` (`function ScreenAutomationsJournal`) — à conserver, utilisera désormais aussi `agency_workflow_runs`
-- Memory locale : `C:\Users\Admin\.claude\projects\c--Users-Admin-Desktop-Espace-client-HELP-AI\memory\` — non synchronisée entre machines
-
----
-
-## Comment reprendre demain
+## 🧭 Comment reprendre demain
 
 Sur l'autre poste :
 
 1. `git pull origin main`
 2. Ouvrir une nouvelle conversation Claude Code
-3. Dire : *"Lis SPEC_WORKFLOWS.md, on reprend le chantier de la page Workflows. Mes réponses aux 5 questions sont : [tes réponses]. Tu peux commencer par l'étape 1 (migration BDD)."*
+3. Dire : *"Lis SPEC_WORKFLOWS.md. On reprend l'étape X. Twilio est connecté / pas connecté. Mes ajustements sont …"*
 
-Le fichier servira de doc de référence durable pour le chantier.
+Le fichier sert de référence durable pour le chantier.
