@@ -2736,103 +2736,249 @@ window.LeadFunnelAndSourceStats = LeadFunnelAndSourceStats;
   <script type="text/babel" data-presets="env,react">
 /* Pipeline, Sales, Customers screens */
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapping statut → colonne Kanban + statut "représentatif" pour chaque colonne
+// (le drop sur une colonne pousse le lead à ce statut canonique).
+// ─────────────────────────────────────────────────────────────────────────────
+const PIPELINE_COLS = [
+  { id: "nouveau",    label: "Nouveau",   color: "var(--text-3)", statuts: ["nouveau", "qualification_en_cours"], dropTo: "nouveau" },
+  { id: "qualifie",   label: "Qualifié",  color: "var(--info)",   statuts: ["qualifie", "contacté"], dropTo: "qualifie" },
+  { id: "rdv",        label: "RDV",       color: "var(--accent)", statuts: ["rdv_pris", "rdv_effectue"], dropTo: "rdv_pris" },
+  { id: "devis",      label: "Devis",     color: "var(--accent-2)", statuts: ["devis_a_envoyer", "devis_envoye"], dropTo: "devis_envoye" },
+  { id: "signe",      label: "Signé",     color: "var(--success)", statuts: ["devis_signe", "chantier_en_cours"], dropTo: "devis_signe" },
+  { id: "termine",    label: "Chantier OK", color: "var(--success)", statuts: ["chantier_termine"], dropTo: "chantier_termine" },
+];
+const DEAD_STATUTS = ["perdu", "devis_perdu", "no_show", "desinscrit"];
+
 function ScreenPipeline() {
-  const [view, setView] = React.useState("kanban");
-  const colColors = {
-    "Nouveau": "var(--text-3)",
-    "Qualifié": "var(--info)",
-    "Devis envoyé": "var(--accent-2)",
-    "Négociation": "var(--accent)",
-    "Gagné": "var(--success)",
-  };
-  const totalByCol = Object.fromEntries(
-    Object.entries(PIPELINE).map(([k, v]) => [k, v.reduce((s, d) => s + parseInt(d.value.replace(/\D/g, "")), 0)])
-  );
-  const grandTotal = Object.values(totalByCol).reduce((s, v) => s + v, 0);
+  const [view, setView]               = React.useState("kanban");
+  const [filterClient, setFilterClient] = React.useState("all");
+  const [filterHot, setFilterHot]     = React.useState(false);
+  const [search, setSearch]           = React.useState("");
+  const [draggingId, setDraggingId]   = React.useState(null);
+  const [dropTarget, setDropTarget]   = React.useState(null);
+  const [savingDrop, setSavingDrop]   = React.useState(false);
+  const [tick, setTick]               = React.useState(0);
+  const [errorMsg, setErrorMsg]       = React.useState(null);
+
+  const allLeads = window.__HELPAI_LEADS_ROWS || [];
+  const clients  = window.__HELPAI_CLIENTS_ROWS || [];
+  const clientNameOf = (id) => { const c = clients.find(x => x.id === id); return c ? c.nom : "—"; };
+
+  // Filtrer + re-bucketer les leads dans les colonnes
+  const filteredLeads = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allLeads.filter(l => {
+      // Exclure les morts
+      if (DEAD_STATUTS.includes(l.statut)) return false;
+      // Filtre par client
+      if (filterClient !== "all" && l.client_id !== filterClient) return false;
+      // Filtre chauds
+      if (filterHot && !(l.priorite === "haute" || l.urgence === "urgent")) return false;
+      // Search
+      if (q) {
+        const hay = [l.nom, l.email, l.telephone, l.prestation, l.source, clientNameOf(l.client_id)].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [allLeads, filterClient, filterHot, search, clients.length, tick]);
+
+  const colById = React.useMemo(() => {
+    const buckets = Object.fromEntries(PIPELINE_COLS.map(c => [c.id, []]));
+    for (const l of filteredLeads) {
+      const col = PIPELINE_COLS.find(c => c.statuts.includes(l.statut)) || PIPELINE_COLS[0];
+      buckets[col.id].push(l);
+    }
+    return buckets;
+  }, [filteredLeads]);
+
+  const stats = React.useMemo(() => {
+    const total       = filteredLeads.length;
+    const totalValue  = filteredLeads.reduce((s, l) => s + (l.montant_chantier || 0), 0) / 100;
+    const signed      = filteredLeads.filter(l => LEAD_PROGRESSED.signe.includes(l.statut)).length;
+    const winRate     = total > 0 ? (signed / total) * 100 : 0;
+    // Cycle moyen : âge moyen des leads non clos en jours
+    const ageDays     = filteredLeads.map(l => l.created_at ? (Date.now() - new Date(l.created_at).getTime()) / 86400e3 : 0);
+    const cycleAvg    = ageDays.length ? (ageDays.reduce((s, x) => s + x, 0) / ageDays.length).toFixed(1) : "0";
+    return { total, totalValue, signed, winRate, cycleAvg };
+  }, [filteredLeads]);
+
+  async function moveToColumn(leadId, colId) {
+    const col = PIPELINE_COLS.find(c => c.id === colId);
+    if (!col) return;
+    const lead = allLeads.find(l => l.id === leadId);
+    if (!lead) return;
+    // Ne rien faire si déjà dans cette colonne
+    if (col.statuts.includes(lead.statut)) return;
+    setSavingDrop(true);
+    setErrorMsg(null);
+    const updates = { statut: col.dropTo, updated_at: new Date().toISOString() };
+    if (col.dropTo === "devis_envoye" && !lead.devis_envoye_le) updates.devis_envoye_le = new Date().toISOString();
+    const { error } = await sb.from("agency_leads").update(updates).eq("id", leadId);
+    setSavingDrop(false);
+    if (error) { setErrorMsg(error.message); return; }
+    // Mise à jour optimiste locale + tick pour re-render
+    lead.statut = col.dropTo;
+    if (updates.devis_envoye_le) lead.devis_envoye_le = updates.devis_envoye_le;
+    setTick(t => t + 1);
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return "—";
+    const delta = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (delta < 3600)  return Math.max(1, Math.floor(delta / 60)) + "min";
+    if (delta < 86400) return Math.floor(delta / 3600) + "h";
+    return Math.floor(delta / 86400) + "j";
+  }
+
+  function srcEmoji(src) {
+    return ({ google_ads: "🔍", meta: "📘", gmb: "📍", site: "🌐", appel: "📞", lsa: "🅖", autre: "🔗" })[src] || "•";
+  }
 
   return (
     <div className="stack-lg fade-up">
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-        <KpiCard label="Pipeline total" value={(grandTotal/1000).toFixed(0)} unit="k €" trend="+34.2k" dir="up"/>
-        <KpiCard label="Deals actifs" value={Object.values(PIPELINE).reduce((s, v) => s + v.length, 0)} trend="+4" dir="up"/>
-        <KpiCard label="Cycle moyen" value="14.2" unit="j" trend="-2.1j" dir="up"/>
-        <KpiCard label="Win rate" value="32.4" unit="%" trend="+1.8pt" dir="up"/>
+        <KpiCard label="Pipeline total" value={(stats.totalValue / 1000).toFixed(1)} unit="k €" trend={stats.total + " deals"} dir="flat" storageNs="pipe.k.0"/>
+        <KpiCard label="Deals actifs" value={String(stats.total)} trend={"-" + DEAD_STATUTS.filter(s => allLeads.some(l => l.statut === s)).length + " morts"} dir="flat" storageNs="pipe.k.1"/>
+        <KpiCard label="Cycle moyen" value={String(stats.cycleAvg)} unit="j" trend="—" dir="flat" storageNs="pipe.k.2"/>
+        <KpiCard label="Win rate" value={stats.winRate.toFixed(1)} unit="%" trend={stats.signed + " signés"} dir={stats.winRate > 30 ? "up" : "flat"} storageNs="pipe.k.3"/>
       </div>
 
-      <div className="row between">
-        <div className="row" style={{ gap: 8 }}>
+      <div className="row between" style={{ flexWrap: "wrap", gap: 12 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <div className="seg" style={{ width: 200 }}>
             <button className={view === "kanban" ? "active" : ""} onClick={() => setView("kanban")}>Kanban</button>
             <button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>Liste</button>
           </div>
-          <button className="chip active">Tous les deals <span className="count">18</span></button>
-          <button className="chip">Mes deals <span className="count">7</span></button>
-          <button className="chip"><Icon name="filter" size={12}/> Chauds</button>
+          <select className="search" style={{ height: 30, padding: "0 10px", color: "var(--text-1)", cursor: "pointer", minWidth: 140 }}
+                  value={filterClient} onChange={e => setFilterClient(e.target.value)}>
+            <option value="all">Tous les clients</option>
+            {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+          </select>
+          <button className={"chip " + (filterHot ? "active" : "")} onClick={() => setFilterHot(h => !h)}>
+            🔥 Chauds <span className="count">{filteredLeads.filter(l => l.priorite === "haute" || l.urgence === "urgent").length}</span>
+          </button>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <div className="search" style={{ minWidth: 220, height: 30 }}>
+          <div className="search" style={{ minWidth: 220, height: 30, display: "flex", padding: "0 8px" }}>
             <Icon name="search" size={14}/>
-            <span>Chercher un deal…</span>
+            <input type="text" placeholder="Chercher un deal…" value={search}
+                   onChange={e => setSearch(e.target.value)}
+                   style={{ flex: 1, minWidth: 0, height: "100%", border: 0, background: "transparent", color: "var(--text-1)", outline: "none", fontSize: 12.5 }}/>
+            {search && <button onClick={() => setSearch("")} className="btn icon ghost" style={{ height: 22, width: 22, fontSize: 14 }}>×</button>}
           </div>
-          <button className="btn primary"><Icon name="plus" size={14}/> Nouveau deal</button>
+          {savingDrop && <span className="small muted">Sauvegarde…</span>}
         </div>
       </div>
 
+      {errorMsg && (
+        <div className="card" style={{ padding: "8px 12px", background: "oklch(0.68 0.17 25 / 0.10)", borderColor: "var(--danger)" }}>
+          <span className="small" style={{ color: "var(--danger)" }}>❌ {errorMsg}</span>
+        </div>
+      )}
+
       {view === "kanban" ? (
         <div className="kanban">
-          {Object.entries(PIPELINE).map(([col, cards]) => (
-            <div key={col} className="kb-col">
-              <div className="kb-head">
-                <div className="kb-title">
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: colColors[col] }}/>
-                  {col}
+          {PIPELINE_COLS.map(col => {
+            const cards = colById[col.id] || [];
+            const totalK = cards.reduce((s, l) => s + (l.montant_chantier || 0), 0) / 100 / 1000;
+            const isDropTarget = dropTarget === col.id;
+            return (
+              <div key={col.id} className="kb-col"
+                   onDragOver={e => { e.preventDefault(); setDropTarget(col.id); }}
+                   onDragLeave={() => setDropTarget(t => t === col.id ? null : t)}
+                   onDrop={e => {
+                     e.preventDefault();
+                     const leadId = e.dataTransfer.getData("text/plain");
+                     setDropTarget(null);
+                     setDraggingId(null);
+                     if (leadId) moveToColumn(leadId, col.id);
+                   }}
+                   style={{
+                     borderColor: isDropTarget ? col.color : "var(--border-soft)",
+                     background:  isDropTarget ? "var(--accent-soft)" : "var(--bg-2)",
+                     transition: "all 0.15s",
+                   }}>
+                <div className="kb-head">
+                  <div className="kb-title">
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: col.color }}/>
+                    {col.label}
+                  </div>
+                  <span className="kb-count">{cards.length}{totalK > 0 ? " · " + totalK.toFixed(0) + "k €" : ""}</span>
                 </div>
-                <span className="kb-count">{cards.length} · {(totalByCol[col]/1000).toFixed(0)}k €</span>
+                {cards.map(l => {
+                  const isHot = l.priorite === "haute" || l.urgence === "urgent";
+                  const initials = (l.nom || "??").split(/\s+/).filter(Boolean).map(x => x[0]).slice(0,2).join("").toUpperCase();
+                  return (
+                    <div key={l.id}
+                         draggable
+                         onDragStart={e => { e.dataTransfer.setData("text/plain", l.id); setDraggingId(l.id); }}
+                         onDragEnd={() => setDraggingId(null)}
+                         className="kb-card"
+                         style={{
+                           opacity: draggingId === l.id ? 0.4 : 1,
+                           cursor: "grab",
+                           borderColor: isHot ? "var(--accent-border)" : "var(--border-soft)",
+                         }}>
+                      <div className="row between" style={{ marginBottom: 6, gap: 8 }}>
+                        <div className="kb-card-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {l.nom || "Anonyme"}
+                        </div>
+                        {isHot && <span style={{ fontSize: 12 }}>🔥</span>}
+                      </div>
+                      <div className="kb-card-sub">
+                        {srcEmoji(l.source)} {(SOURCE_LABEL[l.source] || l.source || "—")} · {timeAgo(l.created_at)}
+                      </div>
+                      {l.prestation && <div className="small muted" style={{ fontSize: 10.5, marginBottom: 6, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>"{l.prestation}"</div>}
+                      <div className="kb-card-meta">
+                        <span className="av" style={{ width: 22, height: 22, fontSize: 9 }}>{initials}</span>
+                        <span className="kb-card-value">
+                          {l.montant_chantier ? Math.round(l.montant_chantier / 100).toLocaleString("fr-FR") + " €" : (filterClient === "all" ? clientNameOf(l.client_id).slice(0, 14) : "")}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {cards.length === 0 && (
+                  <div className="muted small" style={{ padding: 16, textAlign: "center", border: "1px dashed var(--border-soft)", borderRadius: 8 }}>
+                    Aucun deal
+                  </div>
+                )}
               </div>
-              {cards.map((card, i) => (
-                <div key={i} className="kb-card">
-                  <div className="row between" style={{ marginBottom: 6 }}>
-                    <div className="kb-card-title">{card.name}</div>
-                    {card.hot && <span style={{ fontSize: 12 }}>🔥</span>}
-                  </div>
-                  <div className="kb-card-sub">{card.source} · {card.age}</div>
-                  <div className="kb-card-meta">
-                    <span className={"av"} style={{ width: 22, height: 22, fontSize: 9 }}>{card.owner}</span>
-                    <span className="kb-card-value">{card.value}</span>
-                  </div>
-                </div>
-              ))}
-              <button className="btn ghost" style={{ width: "100%", justifyContent: "center", color: "var(--text-3)", marginTop: 4 }}>
-                <Icon name="plus" size={12}/> Ajouter
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="card">
           <table className="data">
             <thead>
-              <tr>
-                <th>Deal</th><th>Statut</th><th>Valeur</th><th>Source</th><th>Owner</th><th>Âge</th>
-              </tr>
+              <tr><th>Lead</th><th>Statut</th><th>Source</th><th>Client</th><th>Montant</th><th>Reçu</th></tr>
             </thead>
             <tbody>
-              {Object.entries(PIPELINE).flatMap(([col, cards]) =>
-                cards.map((card, i) => (
-                  <tr key={col + i}>
-                    <td><strong>{card.name}</strong>{card.hot && " 🔥"}</td>
-                    <td><span className="tag" style={{ color: colColors[col], borderColor: colColors[col], background: "transparent" }}>{col}</span></td>
-                    <td className="mono">{card.value}</td>
-                    <td>{card.source}</td>
-                    <td><span className="av" style={{ width: 22, height: 22, fontSize: 9 }}>{card.owner}</span></td>
-                    <td className="muted">{card.age}</td>
+              {filteredLeads.length === 0 && <tr><td colSpan={6} className="muted small" style={{ textAlign: "center", padding: 16 }}>Aucun deal pour ce filtre.</td></tr>}
+              {filteredLeads.map(l => {
+                const isHot = l.priorite === "haute" || l.urgence === "urgent";
+                const col = PIPELINE_COLS.find(c => c.statuts.includes(l.statut)) || PIPELINE_COLS[0];
+                return (
+                  <tr key={l.id}>
+                    <td><strong>{l.nom || "Anonyme"}</strong>{isHot && " 🔥"}</td>
+                    <td><span className="tag" style={{ color: col.color, borderColor: col.color, background: "transparent" }}>{col.label}</span></td>
+                    <td>{SOURCE_LABEL[l.source] || l.source || "—"}</td>
+                    <td>{clientNameOf(l.client_id)}</td>
+                    <td className="mono">{l.montant_chantier ? Math.round(l.montant_chantier / 100).toLocaleString("fr-FR") + " €" : "—"}</td>
+                    <td className="muted small">{timeAgo(l.created_at)}</td>
                   </tr>
-                ))
-              )}
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      <div className="small muted" style={{ textAlign: "center", padding: "0 16px" }}>
+        {view === "kanban" ? "Glisse une carte vers une autre colonne pour changer son statut." : "Bascule en vue Kanban pour le drag & drop."}
+      </div>
     </div>
   );
 }
