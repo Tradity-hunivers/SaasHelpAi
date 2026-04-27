@@ -5370,6 +5370,46 @@ function ScreenGMB() {
 
 window.ScreenGMB = ScreenGMB;
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   HELPAI_LEAD_STATUTS — référentiel partagé des statuts de leads.
+   Défini ICI dans le bloc Babel #6 car TABLE_SCHEMAS (ci-dessous) en dépend
+   IMMÉDIATEMENT à l'évaluation. Si on les laissait dans le bloc #7 ils
+   ne seraient pas dans le scope du bloc #6 (chaque <script type="text/babel">
+   a son propre scope JS — `const X` n'est pas global). On les expose
+   sur window pour que les blocs suivants (LeadDetailModal, etc.) puissent
+   y accéder, et le bloc #7 les ré-importe via window.
+   ───────────────────────────────────────────────────────────────────────── */
+const HELPAI_LEAD_STATUTS = {
+  "nouveau":                { color: "var(--accent)",       label: "Nouveau" },
+  "qualification_en_cours": { color: "var(--info)",         label: "Qualification…" },
+  "qualifie":               { color: "var(--info)",         label: "Qualifié" },
+  "qualifié":               { color: "var(--info)",         label: "Qualifié" },
+  "contacte":               { color: "oklch(0.74 0.10 240)", label: "Contacté" },
+  "contacté":               { color: "oklch(0.74 0.10 240)", label: "Contacté" },
+  "rappel":                 { color: "var(--accent)",       label: "À rappeler" },
+  "rdv_pris":               { color: "oklch(0.72 0.15 300)", label: "RDV pris 📅" },
+  "rdv_effectue":           { color: "oklch(0.65 0.15 290)", label: "RDV effectué" },
+  "no_show":                { color: "var(--danger)",       label: "No-show ⚠" },
+  "devis_a_envoyer":        { color: "var(--accent)",       label: "Devis à faire" },
+  "devis_envoye":           { color: "oklch(0.84 0.15 95)", label: "Devis envoyé" },
+  "devis_signe":            { color: "var(--success)",      label: "Signé ✓" },
+  "devis_perdu":            { color: "var(--text-3)",       label: "Devis perdu" },
+  "chantier_en_cours":      { color: "var(--success)",      label: "En cours 🔧" },
+  "chantier_termine":       { color: "oklch(0.65 0.13 155)", label: "Terminé ✓" },
+  "gagne":                  { color: "var(--success)",      label: "Gagné 🏆" },
+  "gagné":                  { color: "var(--success)",      label: "Gagné 🏆" },
+  "perdu":                  { color: "var(--text-3)",       label: "Perdu" },
+};
+const HELPAI_LEAD_STATUT_OPTIONS = [
+  "nouveau", "qualification_en_cours", "qualifie", "contacte", "rappel",
+  "rdv_pris", "rdv_effectue", "no_show",
+  "devis_a_envoyer", "devis_envoye", "devis_signe", "devis_perdu",
+  "chantier_en_cours", "chantier_termine",
+  "gagne", "perdu",
+];
+window.HELPAI_LEAD_STATUTS = HELPAI_LEAD_STATUTS;
+window.HELPAI_LEAD_STATUT_OPTIONS = HELPAI_LEAD_STATUT_OPTIONS;
+
 /* ============ DataEditDrawer (admin global edit panel) ============ */
 const TABLE_SCHEMAS = {
   agency_kpis: {
@@ -6665,31 +6705,13 @@ window.LeadDetailModal = LeadDetailModal;
   <script type="text/babel" data-presets="env,react">
 /* AI Activity, Automations, Integrations, Team screens */
 
-/* Helper used by both ScreenAI and ScreenAds to format relative time */
-/* Lead status badge helper — covers all statuts of the artisan automation flow */
-const HELPAI_LEAD_STATUTS = {
-  "nouveau":                { color: "var(--accent)",       label: "Nouveau" },
-  "qualification_en_cours": { color: "var(--info)",         label: "Qualification…" },
-  "qualifie":               { color: "var(--info)",         label: "Qualifié" },
-  "qualifié":               { color: "var(--info)",         label: "Qualifié" },
-  "contacte":               { color: "oklch(0.74 0.10 240)", label: "Contacté" },
-  "contacté":               { color: "oklch(0.74 0.10 240)", label: "Contacté" },
-  "rappel":                 { color: "var(--accent)",       label: "À rappeler" },
-  "rdv_pris":               { color: "oklch(0.72 0.15 300)", label: "RDV pris 📅" },
-  "rdv_effectue":           { color: "oklch(0.65 0.15 290)", label: "RDV effectué" },
-  "no_show":                { color: "var(--danger)",       label: "No-show ⚠" },
-  "devis_a_envoyer":        { color: "var(--accent)",       label: "Devis à faire" },
-  "devis_envoye":           { color: "oklch(0.84 0.15 95)", label: "Devis envoyé" },
-  "devis_signe":            { color: "var(--success)",      label: "Signé ✓" },
-  "devis_perdu":            { color: "var(--text-3)",       label: "Devis perdu" },
-  "chantier_en_cours":      { color: "var(--success)",      label: "En cours 🔧" },
-  "chantier_termine":       { color: "oklch(0.65 0.13 155)", label: "Terminé ✓" },
-  "gagne":                  { color: "var(--success)",      label: "Gagné 🏆" },
-  "gagné":                  { color: "var(--success)",      label: "Gagné 🏆" },
-  "perdu":                  { color: "var(--text-3)",       label: "Perdu" },
-};
+/* Lead status référentiel — défini dans le bloc Babel #6 (avant TABLE_SCHEMAS),
+   réutilisé ici via window pour rester accessible localement à ce bloc.
+   On lit depuis window pour éviter le conflit de redéclaration block-scoped
+   (chaque <script type="text/babel"> a son propre scope au runtime, mais
+   l'analyseur statique de l'IDE traite le fichier comme un seul module). */
 function helpAiLeadStatut(s) {
-  return HELPAI_LEAD_STATUTS[String(s || "").toLowerCase()] || { color: "var(--text-3)", label: s || "—" };
+  return (window.HELPAI_LEAD_STATUTS || {})[String(s || "").toLowerCase()] || { color: "var(--text-3)", label: s || "—" };
 }
 function HelpAiLeadStatutBadge({ statut }) {
   const d = helpAiLeadStatut(statut);
@@ -6702,14 +6724,6 @@ function HelpAiLeadStatutBadge({ statut }) {
 }
 window.helpAiLeadStatut = helpAiLeadStatut;
 window.HelpAiLeadStatutBadge = HelpAiLeadStatutBadge;
-
-const HELPAI_LEAD_STATUT_OPTIONS = [
-  "nouveau", "qualification_en_cours", "qualifie", "contacte", "rappel",
-  "rdv_pris", "rdv_effectue", "no_show",
-  "devis_a_envoyer", "devis_envoye", "devis_signe", "devis_perdu",
-  "chantier_en_cours", "chantier_termine",
-  "gagne", "perdu",
-];
 
 function helpAiRelTime(iso, nowMs) {
   if (!iso) return "—";
