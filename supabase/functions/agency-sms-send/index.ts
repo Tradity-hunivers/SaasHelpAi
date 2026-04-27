@@ -24,13 +24,29 @@ interface SendBody {
   lead_id?: string;
   client_id?: string;
   type_msg?: string;
+  from?: string;         // override explicite (sinon dérivé de client_id ou env)
 }
 
-async function sendSms(to: string, body: string): Promise<{ sid: string | null; error?: string }> {
+// Trouver le numéro Twilio à utiliser comme expéditeur pour un client donné.
+// Cascade : from explicite → client.twilio_phone → env TWILIO_PHONE_FROM
+async function resolveFrom(clientId: string | undefined, fromOverride?: string): Promise<string> {
+  if (fromOverride) return fromOverride;
+  if (clientId) {
+    const { data } = await sb
+      .from('agency_clients')
+      .select('twilio_phone')
+      .eq('id', clientId)
+      .maybeSingle();
+    if (data?.twilio_phone) return data.twilio_phone;
+  }
+  return FROM;
+}
+
+async function sendSms(from: string, to: string, body: string): Promise<{ sid: string | null; error?: string }> {
   try {
     const auth   = btoa(`${SID}:${TOKEN}`);
     const params = new URLSearchParams();
-    params.set('From', FROM);
+    params.set('From', from);
     params.set('To', to);
     params.set('Body', body);
     const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
@@ -62,7 +78,8 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'to + body required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const result = await sendSms(body.to, body.body);
+  const fromPhone = await resolveFrom(body.client_id, body.from);
+  const result = await sendSms(fromPhone, body.to, body.body);
 
   // Logger dans agency_lead_conversations
   if (body.lead_id || body.client_id) {

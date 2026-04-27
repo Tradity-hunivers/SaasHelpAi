@@ -24,19 +24,38 @@ function twiml(body = '') {
   });
 }
 
-// Trouver le client (artisan) à qui appartient ce numéro Twilio.
-// MVP : un seul client → on prend le premier actif. À étendre quand on aura
-// agency_clients.twilio_phone (provisioning par artisan).
+// Trouver l'artisan à qui appartient le numéro Twilio appelé.
+// On cherche d'abord par twilio_phone (numéro principal), puis par twilio_phone_ads.
+// Fallback : premier client actif (utile pour le tout premier artisan).
 async function findClientByTwilioNumber(twilioNumber: string) {
-  // TODO quand colonne twilio_phone existera :
-  //   sb.from('agency_clients').select(...).eq('twilio_phone', twilioNumber).maybeSingle();
+  if (twilioNumber) {
+    // Match exact (avec et sans le préfixe + au cas où)
+    const variants = [twilioNumber, twilioNumber.replace(/^\+/, ''), '+' + twilioNumber.replace(/^\+/, '')];
+    const { data: byMain } = await sb
+      .from('agency_clients')
+      .select('id, nom, telephone, whatsapp_phone, telegram_chat_id, canal_notif, twilio_phone, twilio_phone_ads')
+      .in('twilio_phone', variants)
+      .limit(1)
+      .maybeSingle();
+    if (byMain) return { ...byMain, _matched: 'main' };
+
+    const { data: byAds } = await sb
+      .from('agency_clients')
+      .select('id, nom, telephone, whatsapp_phone, telegram_chat_id, canal_notif, twilio_phone, twilio_phone_ads')
+      .in('twilio_phone_ads', variants)
+      .limit(1)
+      .maybeSingle();
+    if (byAds) return { ...byAds, _matched: 'ads' };
+  }
+
+  // Fallback : premier artisan actif (utile pour le MVP avec un seul client)
   const { data } = await sb
     .from('agency_clients')
-    .select('id, nom, telephone, whatsapp_phone, telegram_chat_id, canal_notif')
+    .select('id, nom, telephone, whatsapp_phone, telegram_chat_id, canal_notif, twilio_phone, twilio_phone_ads')
     .eq('statut', 'actif')
     .limit(1)
     .maybeSingle();
-  return data;
+  return data ? { ...data, _matched: 'fallback' } : null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -73,11 +92,15 @@ Deno.serve(async (req: Request) => {
 
       if (!leadId && isMissed) {
         // Créer un lead "appel manqué" : permet à l'engine de déclencher
-        // workflow #3 (SMS d'excuse + notif artisan)
+        // workflow #3 (SMS d'excuse + notif artisan).
+        // Source dérivée du numéro Twilio appelé : 'appel' pour le principal,
+        // 'ads' (rebadgé en google_ads par défaut, à raffiner par UTM ensuite)
+        // si l'appel est tombé sur le numéro de tracking ads.
+        const sourceFromMatch = (client as any)?._matched === 'ads' ? 'google_ads' : 'appel';
         const { data: newLead } = await sb.from('agency_leads').insert({
           client_id:    client.id,
           telephone:    fromPhone,
-          source:       'appel',
+          source:       sourceFromMatch,
           statut:       'nouveau',
           appel_manque: true,
         }).select('id').single();

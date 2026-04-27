@@ -19,11 +19,11 @@ const SID   = Deno.env.get('TWILIO_ACCOUNT_SID')!;
 const TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')!;
 const FROM  = Deno.env.get('TWILIO_PHONE_FROM')!;
 
-async function sendSms(to: string, body: string) {
+async function sendSms(from: string, to: string, body: string) {
   try {
     const auth = btoa(`${SID}:${TOKEN}`);
     const params = new URLSearchParams();
-    params.set('From', FROM);
+    params.set('From', from || FROM);
     params.set('To', to);
     params.set('Body', body);
     await fetch(`https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json`, {
@@ -49,10 +49,26 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return twiml();
 
   const form      = await req.formData();
-  const fromPhone = (form.get('From') || '').toString();
+  const fromPhone = (form.get('From') || '').toString(); // numéro du prospect
+  const toPhone   = (form.get('To') || '').toString();   // numéro Twilio appelé (artisan)
   const body      = ((form.get('Body') || '').toString()).trim();
 
   if (!fromPhone || !body) return twiml();
+
+  // Identifier le client (artisan) qui possède toPhone (twilio_phone ou twilio_phone_ads).
+  // Sert au reply auto : on répond depuis le bon numéro pour conserver le thread chez le prospect.
+  let toFromForReply = FROM;
+  if (toPhone) {
+    const variants = [toPhone, toPhone.replace(/^\+/, ''), '+' + toPhone.replace(/^\+/, '')];
+    const { data: ownerClient } = await sb
+      .from('agency_clients')
+      .select('twilio_phone, twilio_phone_ads')
+      .or(`twilio_phone.in.(${variants.map(v => `"${v}"`).join(',')}),twilio_phone_ads.in.(${variants.map(v => `"${v}"`).join(',')})`)
+      .limit(1)
+      .maybeSingle();
+    if (ownerClient?.twilio_phone) toFromForReply = ownerClient.twilio_phone;
+    else if (ownerClient?.twilio_phone_ads) toFromForReply = ownerClient.twilio_phone_ads;
+  }
 
   // Trouver le lead le plus récent avec ce téléphone
   const { data: lead } = await sb
@@ -98,18 +114,18 @@ Deno.serve(async (req: Request) => {
     else if (lower.includes('locataire') || lower.includes('locat')) proprio = 'locataire';
 
     if (!proprio) {
-      await sendSms(fromPhone, "Je n'ai pas compris. Répondez PROPRIO ou LOCATAIRE.");
+      await sendSms(toFromForReply, fromPhone, "Je n'ai pas compris. Répondez PROPRIO ou LOCATAIRE.");
       return twiml();
     }
     await sb.from('agency_leads').update({ proprietaire: proprio, sms_etape: 2 }).eq('id', leadId);
-    await sendSms(fromPhone, "Merci. Pour quelle prestation nous contactez-vous ? (ex: toiture, plomberie, rénovation...)");
+    await sendSms(toFromForReply, fromPhone, "Merci. Pour quelle prestation nous contactez-vous ? (ex: toiture, plomberie, rénovation...)");
     return twiml();
   }
 
   // Étape 2 : prestation
   if (etape === 2) {
     await sb.from('agency_leads').update({ prestation: body, sms_etape: 3 }).eq('id', leadId);
-    await sendSms(fromPhone, "Compris. Votre demande est-elle urgente ?\n1 - Urgent (moins de 7 jours)\n2 - Moyen terme (15-30 jours)\n3 - Projet futur");
+    await sendSms(toFromForReply, fromPhone, "Compris. Votre demande est-elle urgente ?\n1 - Urgent (moins de 7 jours)\n2 - Moyen terme (15-30 jours)\n3 - Projet futur");
     return twiml();
   }
 
@@ -126,7 +142,7 @@ Deno.serve(async (req: Request) => {
       statut:    'qualifie',
       priorite,
     }).eq('id', leadId);
-    await sendSms(fromPhone, "Merci pour ces informations. Nous revenons vers vous très rapidement !");
+    await sendSms(toFromForReply, fromPhone, "Merci pour ces informations. Nous revenons vers vous très rapidement !");
     // La notif artisan (WA/Telegram selon canal_notif) est gérée par l'engine ou agency-notify
     return twiml();
   }
@@ -134,7 +150,7 @@ Deno.serve(async (req: Request) => {
   // Confirmation RDV — réponse "OUI"
   if (lower === 'oui' && lead.rdv_datetime && !lead.rdv_confirme) {
     await sb.from('agency_leads').update({ rdv_confirme: true }).eq('id', leadId);
-    await sendSms(fromPhone, "Parfait, à tout à l'heure !");
+    await sendSms(toFromForReply, fromPhone, "Parfait, à tout à l'heure !");
     return twiml();
   }
 
@@ -148,9 +164,9 @@ Deno.serve(async (req: Request) => {
         const msg = url
           ? `Merci beaucoup ! Votre avis nous aiderait énormément :\n${url}`
           : "Merci beaucoup, votre satisfaction est notre priorité !";
-        await sendSms(fromPhone, msg);
+        await sendSms(toFromForReply, fromPhone, msg);
       } else {
-        await sendSms(fromPhone, "Merci pour votre retour. Nous revenons vers vous rapidement.");
+        await sendSms(toFromForReply, fromPhone, "Merci pour votre retour. Nous revenons vers vous rapidement.");
         // TODO : notifier l'artisan (alerte client insatisfait) via canal_notif
       }
       return twiml();
