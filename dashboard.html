@@ -5076,6 +5076,10 @@ function ScreenCustomers() {
   const [statutFilter, setStatutFilter] = React.useState("all");
   const [openLeadId, setOpenLeadId] = React.useState(null);
   const [newLeadOpen, setNewLeadOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const [dateRange, setDateRange] = React.useState("all"); // 7j / 30j / 90j / all
+  const [sortKey, setSortKey] = React.useState("created_at");
+  const [sortDir, setSortDir] = React.useState("desc"); // asc / desc
   const filteredCustomers = CUSTOMERS.filter(c => filter === "all" || c.status === filter);
 
   const sourceColors = {
@@ -5098,10 +5102,75 @@ function ScreenCustomers() {
   const clients  = window.__HELPAI_CLIENTS_ROWS || [];
   const clientNameOf = (id) => { const c = clients.find(x => x.id === id); return c ? c.nom : "—"; };
 
-  const filteredLeads = allLeads.filter(l => {
-    if (statutFilter === "all") return true;
-    return String(l.statut || "").toLowerCase() === statutFilter;
-  });
+  const filteredLeads = React.useMemo(() => {
+    const since = dateRange === "all" ? null
+                : dateRange === "7j"  ? Date.now() -  7 * 86400e3
+                : dateRange === "30j" ? Date.now() - 30 * 86400e3
+                :                       Date.now() - 90 * 86400e3;
+    const q = search.trim().toLowerCase();
+
+    let arr = allLeads.filter(l => {
+      if (statutFilter !== "all" && String(l.statut || "").toLowerCase() !== statutFilter) return false;
+      if (since && l.created_at && new Date(l.created_at).getTime() < since) return false;
+      if (q) {
+        const hay = [l.nom, l.email, l.telephone, l.prestation, l.message, l.source, clientNameOf(l.client_id)]
+          .filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    arr = arr.slice().sort((a, b) => {
+      const va = a[sortKey] || "";
+      const vb = b[sortKey] || "";
+      if (sortKey === "created_at" || sortKey === "updated_at" || sortKey === "rdv_datetime") {
+        const ta = va ? new Date(va).getTime() : 0;
+        const tb = vb ? new Date(vb).getTime() : 0;
+        return sortDir === "asc" ? ta - tb : tb - ta;
+      }
+      const sa = String(va).toLowerCase();
+      const sb_ = String(vb).toLowerCase();
+      return sortDir === "asc" ? sa.localeCompare(sb_) : sb_.localeCompare(sa);
+    });
+
+    return arr;
+  }, [allLeads, statutFilter, dateRange, search, sortKey, sortDir, clients.length]);
+
+  function toggleSort(key) {
+    if (sortKey === key) setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("desc"); }
+  }
+  function sortIndicator(key) {
+    if (sortKey !== key) return "";
+    return sortDir === "asc" ? " ▲" : " ▼";
+  }
+
+  function exportCsv() {
+    const cols = [
+      ["created_at","Reçu le"], ["nom","Nom"], ["email","Email"], ["telephone","Téléphone"],
+      ["source","Source"], ["statut","Statut"], ["prestation","Prestation"], ["urgence","Urgence"],
+      ["priorite","Priorité"], ["qualifie","Qualifié"], ["rdv_datetime","RDV"],
+      ["devis_envoye_le","Devis envoyé"], ["montant_chantier","Montant (cents)"],
+      ["satisfaction_note","Note"], ["client_id","Client ID"]
+    ];
+    const lines = [cols.map(c => '"' + c[1].replace(/"/g, '""') + '"').join(",")];
+    for (const l of filteredLeads) {
+      const cells = cols.map(([k]) => {
+        const v = l[k];
+        if (v == null) return "";
+        if (typeof v === "boolean") return v ? "oui" : "non";
+        return '"' + String(v).replace(/"/g, '""').replace(/\n/g, " ") + '"';
+      });
+      lines.push(cells.join(","));
+    }
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = "leads_helpai_" + new Date().toISOString().slice(0,10) + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   const STATUT_CHIPS = [
     { id: "all",                     label: "Tous" },
@@ -5133,17 +5202,34 @@ function ScreenCustomers() {
         <KpiCard label="Santé moyenne" value="82" unit="/100" trend="+3pt" dir="up"/>
       </div>
 
-      <div className="row between">
+      <div className="row between" style={{ flexWrap: "wrap", gap: 12 }}>
         <div className="seg" style={{ width: 320 }}>
-          <button className={tab === "leads" ? "active" : ""} onClick={() => setTab("leads")}>Leads entrants · {INBOUND_LEADS.length}</button>
+          <button className={tab === "leads" ? "active" : ""} onClick={() => setTab("leads")}>Leads entrants · {allLeads.length}</button>
           <button className={tab === "clients" ? "active" : ""} onClick={() => setTab("clients")}>Clients · {CUSTOMERS.length}</button>
         </div>
-        <div className="row" style={{ gap: 8 }}>
-          <div className="search" style={{ minWidth: 240, height: 30 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <div className="search" style={{ minWidth: 240, height: 30, display: "flex", padding: "0 8px" }}>
             <Icon name="search" size={14}/>
-            <span>Chercher un contact…</span>
+            <input type="text"
+                   placeholder="Chercher nom, tél, email, prestation…"
+                   value={search}
+                   onChange={e => setSearch(e.target.value)}
+                   style={{ flex: 1, minWidth: 0, height: "100%", border: 0, background: "transparent", color: "var(--text-1)", outline: "none", fontSize: 12.5 }}/>
+            {search && (
+              <button onClick={() => setSearch("")} className="btn icon ghost" style={{ height: 22, width: 22, fontSize: 14 }}>×</button>
+            )}
           </div>
-          <button className="btn"><Icon name="download" size={13}/> Export CSV</button>
+          <select className="search" style={{ height: 30, padding: "0 10px", color: "var(--text-1)", cursor: "pointer", minWidth: 0 }}
+                  value={dateRange} onChange={e => setDateRange(e.target.value)}
+                  title="Filtre par date de réception">
+            <option value="all">Toute période</option>
+            <option value="7j">7 derniers jours</option>
+            <option value="30j">30 derniers jours</option>
+            <option value="90j">90 derniers jours</option>
+          </select>
+          <button className="btn" onClick={exportCsv} title="Exporter les leads filtrés en CSV">
+            <Icon name="download" size={13}/> Export CSV ({filteredLeads.length})
+          </button>
           <button className="btn primary" onClick={() => setNewLeadOpen(true)}>
             <Icon name="plus" size={14}/> Nouveau lead test
           </button>
@@ -5179,11 +5265,11 @@ function ScreenCustomers() {
             <table className="data">
               <thead>
                 <tr>
-                  <EditableText value="Lead" tag="th"/>
-                  <EditableText value="Source" tag="th"/>
-                  <EditableText value="Qualification" tag="th"/>
-                  <EditableText value="Statut" tag="th"/>
-                  <EditableText value="Client / Reçu" tag="th"/>
+                  <th onClick={() => toggleSort("nom")} style={{ cursor: "pointer", userSelect: "none" }}>Lead{sortIndicator("nom")}</th>
+                  <th onClick={() => toggleSort("source")} style={{ cursor: "pointer", userSelect: "none" }}>Source{sortIndicator("source")}</th>
+                  <th>Qualification</th>
+                  <th onClick={() => toggleSort("statut")} style={{ cursor: "pointer", userSelect: "none" }}>Statut{sortIndicator("statut")}</th>
+                  <th onClick={() => toggleSort("created_at")} style={{ cursor: "pointer", userSelect: "none" }}>Client / Reçu{sortIndicator("created_at")}</th>
                   <th></th>
                 </tr>
               </thead>
