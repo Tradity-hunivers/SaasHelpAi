@@ -24,6 +24,10 @@ HelpAi Dashboard _standalone_.html
 # Local Claude Code permissions
 .claude/settings.local.json
 
+# Payloads temporaires pour les déploiements MCP edge functions
+.claude/_*.json
+.claude/_*.txt
+
 # Misc
 *.log
 node_modules/
