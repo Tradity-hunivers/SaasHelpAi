@@ -7480,6 +7480,8 @@ function ScreenAutomations() {
   const [tick, setTick] = React.useState(0);
   const [openWorkflow, setOpenWorkflow] = React.useState(null); // { slug, ... } pour la modal historique
   const [previewWorkflow, setPreviewWorkflow] = React.useState(null); // { slug, ... } pour la modal aperçu
+  const [forceRunning, setForceRunning] = React.useState(false);
+  const [forceResult, setForceResult] = React.useState(null);
 
   // Charger les settings du client sélectionné
   React.useEffect(() => {
@@ -7606,8 +7608,47 @@ function ScreenAutomations() {
           <button className="btn" onClick={() => bulkToggle(false)} disabled={loading || !selClient}>
             <Icon name="pause" size={13}/> Tout désactiver
           </button>
+          <button className="btn primary" onClick={async () => {
+            setForceRunning(true); setForceResult(null);
+            try {
+              const { data, error } = await sb.functions.invoke("agency-automation-engine", { body: {} });
+              if (error) setForceResult({ error: error.message || String(error) });
+              else setForceResult(data || {});
+            } catch (e) {
+              setForceResult({ error: String(e) });
+            } finally {
+              setForceRunning(false);
+              setTick(t => t + 1);
+            }
+          }} disabled={forceRunning} title="Exécute l'engine maintenant (sans attendre le tick de 5 min)">
+            <Icon name="zap" size={13}/> {forceRunning ? "Exécution…" : "Forcer l'engine"}
+          </button>
         </div>
       </div>
+
+      {forceResult && (
+        <div className="card" style={{ padding: "10px 14px", background: forceResult.error ? "oklch(0.68 0.17 25 / 0.10)" : "oklch(0.78 0.13 155 / 0.10)", borderColor: forceResult.error ? "var(--danger)" : "var(--success)" }}>
+          <div className="row between" style={{ marginBottom: 6 }}>
+            <strong style={{ fontSize: 12.5, color: forceResult.error ? "var(--danger)" : "var(--success)" }}>
+              {forceResult.error ? "❌ Erreur engine" : `✅ Engine exécuté — ${forceResult.processed || 0} action(s) déclenchée(s)`}
+            </strong>
+            <button className="btn icon ghost" onClick={() => setForceResult(null)} style={{ height: 22, width: 22 }}>×</button>
+          </div>
+          {forceResult.results && forceResult.results.length > 0 && (
+            <div className="stack-xs">
+              {forceResult.results.map((r, i) => (
+                <div key={i} className="small mono" style={{ fontSize: 11 }}>
+                  • <strong>{r.type}</strong> — {r.lead}
+                </div>
+              ))}
+            </div>
+          )}
+          {forceResult.error && <div className="small" style={{ color: "var(--danger)" }}>{forceResult.error}</div>}
+          {forceResult.results && forceResult.results.length === 0 && !forceResult.error && (
+            <div className="small muted">Aucune action à déclencher (aucune fenêtre temporelle ouverte sur les leads actifs).</div>
+          )}
+        </div>
+      )}
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         <KpiCard label="Workflows actifs"  value={String(totalEnabled)} unit={" / " + WORKFLOW_CATALOG.length} trend="—" dir="flat" storageNs="autom2.kpi.0"/>
