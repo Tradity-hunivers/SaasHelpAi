@@ -6557,158 +6557,272 @@ function ScreenBlogAdmin({ onRefresh }) {
 
 window.ScreenBlogAdmin = ScreenBlogAdmin;
 
+// Catalogue des 14 workflows métier (côté UI seulement — les slugs doivent matcher
+// agency_workflow_settings.workflow_slug et la logique dans agency-automation-engine).
+const WORKFLOW_CATALOG = [
+  { slug: "sms_qualification_prospect", category: "Lead",   icon: "ai",          name: "SMS de qualification", desc: "Envoie 3 questions au prospect : propriétaire/locataire, prestation, urgence.", trigger: "Quand un nouveau lead arrive", to: "Prospect" },
+  { slug: "notif_lead_chaud_prio",      category: "Lead",   icon: "zap",         name: "Notification lead chaud (prio)", desc: "Alerte instantanée à l'artisan quand un lead propriétaire + urgent est qualifié.", trigger: "Quand le lead devient prioritaire", to: "Artisan" },
+  { slug: "appel_manque_relance",       category: "Appels", icon: "bell",        name: "Relance appel manqué", desc: "SMS d'excuse au prospect + notif artisan quand un appel n'a pas été décroché.", trigger: "Quand un appel sonne sans réponse", to: "Prospect + Artisan" },
+  { slug: "post_appel_menu",            category: "Appels", icon: "check",       name: "Menu post-appel artisan", desc: "10 min après l'appel, propose à l'artisan : RDV pris / devis à envoyer / pas intéressant / à rappeler.", trigger: "10 min après un appel décroché", to: "Artisan" },
+  { slug: "rdv_creation_via_sms",       category: "RDV",    icon: "calendar",    name: "Création RDV par SMS", desc: "L'artisan envoie la date + heure → l'IA parse et crée le RDV automatiquement.", trigger: "Quand l'artisan répond avec une date", to: "Artisan" },
+  { slug: "rdv_rappels_prospect",       category: "RDV",    icon: "bell",        name: "Rappels RDV prospect", desc: "3 SMS automatiques au prospect : J-1, 2h avant (avec confirmation), 30 min avant.", trigger: "Quand un RDV est planifié", to: "Prospect" },
+  { slug: "rdv_check_no_show",          category: "RDV",    icon: "eye",         name: "Vérif post-RDV", desc: "30 min après l'heure du RDV, demande à l'artisan : RDV ok / no-show / reporté.", trigger: "30 min après l'heure prévue", to: "Artisan" },
+  { slug: "no_show_relances",           category: "RDV",    icon: "refresh",     name: "Relances no-show", desc: "Si RDV manqué : SMS au prospect immédiat, +2h, J+1.", trigger: "Quand le RDV passe en no-show", to: "Prospect" },
+  { slug: "devis_relances_prospect",    category: "Devis",  icon: "save",        name: "Relances devis prospect", desc: "Si devis envoyé sans réponse : SMS J+2, J+5, J+15.", trigger: "Après l'envoi d'un devis", to: "Prospect" },
+  { slug: "devis_suivi_artisan",        category: "Devis",  icon: "check",       name: "Suivi devis artisan", desc: "J+7, demande à l'artisan : signé / pas encore / perdu.", trigger: "7 jours après envoi du devis", to: "Artisan" },
+  { slug: "montant_demande_post_signature", category: "Devis", icon: "edit",     name: "Saisie montant chantier", desc: "Quand l'artisan déclare un devis signé, lui demande UNE fois le montant.", trigger: "Quand un devis passe en signé", to: "Artisan" },
+  { slug: "satisfaction_post_chantier", category: "Avis",   icon: "sparkles",    name: "Satisfaction + avis Google", desc: "SMS au prospect (note 1-5). Si ≥4 → lien avis Google. Si ≤3 → alerte artisan.", trigger: "Après confirmation du chantier", to: "Prospect" },
+  { slug: "relances_internes_artisan",  category: "Suivi",  icon: "automations", name: "Rappels internes artisan", desc: "Lead non rappelé 24h, devis non envoyé 48h, chantier non confirmé 30j.", trigger: "Selon inactivité de l'artisan", to: "Artisan" },
+  { slug: "bilan_mensuel_auto",         category: "Suivi",  icon: "overview",    name: "Bilan mensuel auto", desc: "Récap CA + chantiers + panier moyen + sources, par SMS et email à l'artisan.", trigger: "Le 1er du mois", to: "Artisan" },
+];
+
+const WORKFLOW_CATEGORIES = [
+  ["all",     "Tous"],
+  ["Lead",    "Leads"],
+  ["Appels",  "Appels"],
+  ["RDV",     "RDV"],
+  ["Devis",   "Devis"],
+  ["Avis",    "Avis"],
+  ["Suivi",   "Suivi"],
+];
+
 function ScreenAutomations() {
-  const STORAGE_KEY = "helpai_workflows";
-  const [tab, setTab] = React.useState("all");
-  const [workflows, setWorkflows] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
-    catch (e) { return []; }
-  });
+  const clients = window.__HELPAI_CLIENTS_ROWS || [];
+  const [selClient, setSelClient] = React.useState(clients[0] && clients[0].id || "");
+  const [cat, setCat] = React.useState("all");
+  const [settings, setSettings] = React.useState([]);   // rows from agency_workflow_settings
+  const [stats, setStats] = React.useState({});         // { workflow_slug -> { runs30j } }
+  const [loading, setLoading] = React.useState(false);
+  const [savingSlug, setSavingSlug] = React.useState(""); // slug en cours de save (pour spinner)
+  const [tick, setTick] = React.useState(0);
 
-  function persist(list) {
-    setWorkflows(list);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (e) {}
-  }
-  function addWorkflow() {
-    const id = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "w-" + Date.now());
-    persist([
-      ...workflows,
-      {
-        id,
-        name: "Nouveau workflow",
-        trigger: "lead.created",
-        runs: 0,
-        success: 100,
-        last: "jamais",
-        status: "draft",
-      },
-    ]);
-  }
-  function updateField(id, field, value) {
-    persist(workflows.map(w => w.id === id ? { ...w, [field]: value } : w));
-  }
-  function deleteWorkflow(id) {
-    if (!window.confirm("Supprimer ce workflow ?")) return;
-    persist(workflows.filter(w => w.id !== id));
-  }
-  function toggleStatus(id) {
-    persist(workflows.map(w => {
-      if (w.id !== id) return w;
-      const next = w.status === "on" ? "paused" : "on";
-      return { ...w, status: next, last: next === "on" ? "à l'instant" : w.last };
-    }));
+  // Charger les settings du client sélectionné
+  React.useEffect(() => {
+    if (!selClient) return;
+    setLoading(true);
+    sb.from("agency_workflow_settings")
+      .select("*")
+      .eq("client_id", selClient)
+      .then(({ data, error }) => {
+        setLoading(false);
+        if (!error) setSettings(data || []);
+      });
+  }, [selClient, tick]);
+
+  // Charger un compte de runs 30j depuis agency_automation_log (group by type ~= slug racine)
+  React.useEffect(() => {
+    if (!selClient) return;
+    const since = new Date(Date.now() - 30 * 86400e3).toISOString();
+    sb.from("agency_automation_log")
+      .select("type, statut")
+      .eq("client_id", selClient)
+      .gte("created_at", since)
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        // Map type → catégorie de workflow (best-effort)
+        const map = {
+          sms_qual_1: "sms_qualification_prospect",
+          sms_qual_2: "sms_qualification_prospect",
+          appel_manque_sms: "appel_manque_relance",
+          post_appel: "post_appel_menu",
+          rdv_rappel_j1: "rdv_rappels_prospect",
+          rdv_rappel_2h: "rdv_rappels_prospect",
+          rdv_rappel_30m: "rdv_rappels_prospect",
+          rdv_noshow_risk: "rdv_check_no_show",
+          noshow_check: "rdv_check_no_show",
+          noshow_immediat: "no_show_relances",
+          noshow_2h: "no_show_relances",
+          noshow_j1: "no_show_relances",
+          devis_relance_j2: "devis_relances_prospect",
+          devis_relance_j5: "devis_relances_prospect",
+          devis_relance_j15: "devis_relances_prospect",
+          suivi_devis_artisan: "devis_suivi_artisan",
+          satisfaction: "satisfaction_post_chantier",
+          artisan_relance_24h: "relances_internes_artisan",
+          artisan_devis_rappel: "relances_internes_artisan",
+          artisan_chantier_check: "relances_internes_artisan",
+          bilan_mensuel: "bilan_mensuel_auto",
+        };
+        const out = {};
+        (data || []).forEach(r => {
+          const slug = map[r.type] || r.type;
+          if (!out[slug]) out[slug] = { runs30j: 0, ok: 0, ko: 0 };
+          out[slug].runs30j++;
+          if (r.statut === "ok" || r.statut === "envoye" || !r.statut) out[slug].ok++;
+          else out[slug].ko++;
+        });
+        setStats(out);
+      });
+  }, [selClient, tick]);
+
+  const settingBySlug = React.useMemo(() => {
+    const m = {};
+    settings.forEach(s => { m[s.workflow_slug] = s; });
+    return m;
+  }, [settings]);
+
+  const visible = cat === "all" ? WORKFLOW_CATALOG : WORKFLOW_CATALOG.filter(w => w.category === cat);
+  const totalEnabled = settings.filter(s => s.enabled).length;
+  const totalRuns30j = Object.values(stats).reduce((s, x) => s + (x.runs30j || 0), 0);
+  const totalOk      = Object.values(stats).reduce((s, x) => s + (x.ok || 0), 0);
+  const successRate  = totalRuns30j > 0 ? Math.round((totalOk / totalRuns30j) * 1000) / 10 : 0;
+  const hoursSaved   = Math.round(totalRuns30j * 5 / 60);
+
+  async function toggleWorkflow(slug, current) {
+    if (!selClient) return;
+    setSavingSlug(slug);
+    const next = !current;
+    const existing = settingBySlug[slug];
+    if (existing) {
+      await sb.from("agency_workflow_settings")
+        .update({ enabled: next, updated_at: new Date().toISOString() })
+        .eq("id", existing.id);
+    } else {
+      await sb.from("agency_workflow_settings")
+        .insert({ client_id: selClient, workflow_slug: slug, enabled: next });
+    }
+    setSavingSlug("");
+    setTick(t => t + 1);
   }
 
-  const counts = {
-    all: workflows.length,
-    on: workflows.filter(w => w.status === "on").length,
-    paused: workflows.filter(w => w.status === "paused").length,
-    draft: workflows.filter(w => w.status === "draft").length,
-  };
-  const filtered = tab === "all" ? workflows : workflows.filter(w => w.status === tab);
+  async function bulkToggle(enable) {
+    if (!selClient) return;
+    setLoading(true);
+    // upsert toutes les lignes du catalogue
+    for (const w of WORKFLOW_CATALOG) {
+      const existing = settingBySlug[w.slug];
+      if (existing) {
+        await sb.from("agency_workflow_settings").update({ enabled: enable }).eq("id", existing.id);
+      } else {
+        await sb.from("agency_workflow_settings").insert({ client_id: selClient, workflow_slug: w.slug, enabled: enable });
+      }
+    }
+    setLoading(false);
+    setTick(t => t + 1);
+  }
 
-  const totalRuns = workflows.reduce((s, w) => s + (Number(w.runs) || 0), 0);
-  const avgSuccess = workflows.length
-    ? (workflows.reduce((s, w) => s + (Number(w.success) || 0), 0) / workflows.length).toFixed(1)
-    : "0";
-  const hoursSaved = Math.round(totalRuns * 5 / 60);
+  const selectedClient = clients.find(c => c.id === selClient);
 
   return (
     <div className="stack-lg fade-up">
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-        <KpiCard label="Workflows actifs" value={String(counts.on)} trend={counts.on > 0 ? ("+" + counts.on) : "—"} dir="up" storageNs="autom.kpi.0"/>
-        <KpiCard label="Exécutions (30j)" value={totalRuns.toLocaleString("fr-FR")} trend={totalRuns > 0 ? ("+" + totalRuns) : "—"} dir="up" storageNs="autom.kpi.1"/>
-        <KpiCard label="Taux de succès"   value={String(avgSuccess)} unit="%" trend="—" dir="up" storageNs="autom.kpi.2"/>
-        <KpiCard label="Temps gagné"      value={String(hoursSaved)} unit="h" trend={hoursSaved > 0 ? ("+" + hoursSaved + "h") : "—"} dir="up" storageNs="autom.kpi.3"/>
+      <div className="hero-panel">
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <span className="tag accent"><Icon name="automations" size={10}/> Catalogue de workflows</span>
+            <span className="pill"><span className="dot"/> {WORKFLOW_CATALOG.length} workflows disponibles</span>
+          </div>
+          <div className="hp-title">Activez ou désactivez chaque automation par artisan.</div>
+          <div className="hp-sub">Chaque workflow s'exécute selon son déclencheur. Les exécutions sont loggées dans le Journal.</div>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn" onClick={() => bulkToggle(true)} disabled={loading || !selClient}>
+            <Icon name="play" size={13}/> Tout activer
+          </button>
+          <button className="btn" onClick={() => bulkToggle(false)} disabled={loading || !selClient}>
+            <Icon name="pause" size={13}/> Tout désactiver
+          </button>
+        </div>
       </div>
 
-      <div className="row between">
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+        <KpiCard label="Workflows actifs"  value={String(totalEnabled)} unit={" / " + WORKFLOW_CATALOG.length} trend="—" dir="flat" storageNs="autom2.kpi.0"/>
+        <KpiCard label="Exécutions (30j)"  value={totalRuns30j.toLocaleString("fr-FR")} trend={totalRuns30j > 0 ? "+" + totalRuns30j : "—"} dir="up" storageNs="autom2.kpi.1"/>
+        <KpiCard label="Taux de succès"    value={String(successRate || "—")} unit={successRate ? "%" : ""} trend="—" dir={successRate > 90 ? "up" : "flat"} storageNs="autom2.kpi.2"/>
+        <KpiCard label="Temps gagné"       value={String(hoursSaved)} unit="h" trend={hoursSaved > 0 ? ("+" + hoursSaved + "h") : "—"} dir="up" storageNs="autom2.kpi.3"/>
+      </div>
+
+      <div className="row between" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div className="small muted" style={{ marginBottom: 6 }}>Configurer pour le client</div>
+          <select className="search" style={{ minWidth: 240, color: "var(--text-1)", cursor: "pointer" }}
+                  value={selClient} onChange={e => setSelClient(e.target.value)}>
+            {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+          </select>
+        </div>
         <div className="chips">
-          {[["all","Tous",counts.all],["on","Actifs",counts.on],["paused","Pause",counts.paused],["draft","Brouillons",counts.draft]].map(([k,l,n]) => (
-            <button key={k} className={"chip " + (tab === k ? "active" : "")} onClick={() => setTab(k)}>
-              {l} <span className="count">{n}</span>
-            </button>
+          {WORKFLOW_CATEGORIES.map(([k, l]) => (
+            <button key={k} className={"chip " + (cat === k ? "active" : "")} onClick={() => setCat(k)}>{l}</button>
           ))}
         </div>
-        <button className="btn primary" onClick={addWorkflow}>
-          <Icon name="plus" size={14}/> Créer un workflow
-        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
         <table className="data">
           <thead>
             <tr>
-              <EditableText value="Workflow" storageKey="autom.col.name" tag="th"/>
-              <EditableText value="Déclencheur" storageKey="autom.col.trigger" tag="th"/>
-              <EditableText value="Exécutions" storageKey="autom.col.runs" tag="th"/>
-              <EditableText value="Succès" storageKey="autom.col.success" tag="th" style={{ width: "18%" }}/>
-              <EditableText value="Dernière" storageKey="autom.col.last" tag="th"/>
-              <EditableText value="État" storageKey="autom.col.state" tag="th"/>
-              <th></th>
+              <th>Workflow</th>
+              <th>Déclencheur</th>
+              <th>Cible</th>
+              <th style={{ width: 110 }}>Runs 30j</th>
+              <th style={{ width: 130 }}>État</th>
+              <th style={{ width: 110 }}>Action</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 32, textAlign: "center", color: "var(--text-3)" }}>
-                Aucun workflow. Clique sur <strong>Créer un workflow</strong> pour en ajouter.
+            {!selClient && (
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--text-3)" }}>
+                Sélectionne un client pour voir ses workflows.
               </td></tr>
             )}
-            {filtered.map((a) => (
-              <tr key={a.id}>
-                <td>
-                  <EditableText value={a.name} storageKey={"autom." + a.id + ".name"} tag="strong"
-                                onCommit={v => updateField(a.id, "name", v)}/>
-                </td>
-                <td>
-                  <EditableText value={a.trigger} storageKey={"autom." + a.id + ".trigger"} tag="code" className="code"
-                                onCommit={v => updateField(a.id, "trigger", v)}/>
-                </td>
-                <td className="mono">
-                  <EditableText value={String(a.runs)} storageKey={"autom." + a.id + ".runs"} tag="span"
-                                onCommit={v => updateField(a.id, "runs", parseInt(v, 10) || 0)}/>
-                </td>
-                <td>
-                  <div className="row" style={{ gap: 10 }}>
-                    <div className="progress" style={{ flex: 1, maxWidth: 120 }}>
-                      <div className={a.success > 90 ? "p-success" : "p-accent"} style={{ width: Math.min(100, Math.max(0, Number(a.success) || 0)) + "%" }}/>
+            {selClient && loading && (
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--text-3)" }}>Chargement…</td></tr>
+            )}
+            {selClient && !loading && visible.map(w => {
+              const setting = settingBySlug[w.slug];
+              const enabled = setting ? setting.enabled : true; // défaut activé
+              const st = stats[w.slug] || { runs30j: 0 };
+              return (
+                <tr key={w.slug}>
+                  <td>
+                    <div className="row" style={{ gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", color: "var(--accent)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                        <Icon name={w.icon} size={15}/>
+                      </div>
+                      <div>
+                        <strong style={{ fontSize: 13 }}>{w.name}</strong>
+                        <div className="small muted" style={{ marginTop: 2, lineHeight: 1.4 }}>{w.desc}</div>
+                      </div>
                     </div>
-                    <span className="mono small">
-                      <EditableText value={String(a.success)} storageKey={"autom." + a.id + ".success"} tag="span"
-                                    onCommit={v => updateField(a.id, "success", Math.min(100, Math.max(0, parseFloat(v) || 0)))}/>%
+                  </td>
+                  <td className="small muted">{w.trigger}</td>
+                  <td>
+                    <span className={"tag " + (w.to.includes("Prospect") && w.to.includes("Artisan") ? "accent" : w.to === "Prospect" ? "accent" : "success")} style={{ fontSize: 10.5 }}>
+                      {w.to}
                     </span>
-                  </div>
-                </td>
-                <td className="muted small">
-                  <EditableText value={a.last} storageKey={"autom." + a.id + ".last"} tag="span"
-                                onCommit={v => updateField(a.id, "last", v)}/>
-                </td>
-                <td>
-                  {a.status === "on"
-                    ? <span className="tag success"><span className="status-dot ok"/> Actif</span>
-                    : a.status === "paused"
-                      ? <span className="tag"><span className="status-dot off"/> Pause</span>
-                      : <span className="tag"><span className="status-dot off"/> Brouillon</span>}
-                </td>
-                <td>
-                  <div className="row" style={{ gap: 4 }}>
-                    <button className="btn icon ghost" onClick={() => toggleStatus(a.id)} title={a.status === "on" ? "Mettre en pause" : "Activer"}>
-                      <Icon name={a.status === "on" ? "pause" : "play"} size={13}/>
+                  </td>
+                  <td className="mono small">{st.runs30j || "—"}</td>
+                  <td>
+                    {enabled
+                      ? <span className="tag success"><span className="status-dot ok"/> Actif</span>
+                      : <span className="tag"><span className="status-dot off"/> Désactivé</span>}
+                  </td>
+                  <td>
+                    <button
+                      className={"btn " + (enabled ? "" : "primary")}
+                      onClick={() => toggleWorkflow(w.slug, enabled)}
+                      disabled={savingSlug === w.slug}
+                      style={{ height: 28, fontSize: 11.5 }}
+                    >
+                      <Icon name={enabled ? "pause" : "play"} size={12}/>
+                      {savingSlug === w.slug ? "…" : (enabled ? "Désactiver" : "Activer")}
                     </button>
-                    <button className="btn icon ghost" onClick={() => deleteWorkflow(a.id)} title="Supprimer" style={{ color: "var(--danger)" }}>
-                      ×
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
+            {selClient && !loading && visible.length === 0 && (
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--text-3)" }}>
+                Aucun workflow dans cette catégorie.
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="small muted" style={{ textAlign: "center", padding: "0 16px" }}>
-        Les workflows sont stockés en local (localStorage) — c'est un mode démo, idéal pour préparer une story de social-proof.
-        Dis-moi si tu veux passer à un vrai moteur d'exécution branché à Supabase.
+        Les modifications sont sauvegardées en temps réel dans <code className="code">agency_workflow_settings</code>.
+        L'engine <code className="code">agency-automation-engine</code> lit ces toggles à chaque tick.
+        L'historique d'exécution est dans le <strong>Journal des automations</strong>.
       </div>
     </div>
   );
