@@ -103,6 +103,19 @@ Deno.serve(async (req: Request) => {
 
   if (!STRIPE_KEY) return json({ error: 'STRIPE_SECRET_KEY not configured' }, 500);
 
+  // Auth manuelle : on accepte uniquement les utilisateurs authentifiés via Supabase Auth
+  // (verify_jwt=false côté plateforme pour éviter le blocage CORS preflight,
+  // mais on vérifie nous-mêmes le bearer token ici).
+  const authHeader = req.headers.get('Authorization') || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return json({ error: 'Missing Authorization header' }, 401);
+  }
+  const token = authHeader.slice(7);
+  const { data: { user }, error: authErr } = await sb.auth.getUser(token);
+  if (authErr || !user) {
+    return json({ error: 'Invalid or expired token' }, 401);
+  }
+
   let body: { client_id?: string; all?: boolean; limit?: number };
   try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
 
