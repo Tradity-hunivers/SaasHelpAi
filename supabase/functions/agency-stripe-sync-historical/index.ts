@@ -26,7 +26,8 @@ const STRIPE_KEY = Deno.env.get('STRIPE_SECRET_KEY')!;
 const cors = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Max-Age':       '86400',
 };
 
 function json(data: unknown, status = 200) {
