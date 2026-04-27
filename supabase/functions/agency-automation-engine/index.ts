@@ -141,25 +141,35 @@ async function sendTelegramButtons(chatId: string, text: string, buttons: { id: 
 
 async function sendToArtisan(client: any, body: string, buttons?: { id: string; title: string }[]): Promise<boolean> {
   const canal = (client?.canal_notif || 'whatsapp').toLowerCase();
-  if (canal === 'telegram' && client?.telegram_chat_id && client?.telegram_actif) {
-    if (buttons?.length) return sendTelegramButtons(client.telegram_chat_id, body, buttons);
-    return sendTelegramText(client.telegram_chat_id, body);
+  const wantTg = canal === 'telegram' || canal === 'les_deux';
+  const wantWa = canal === 'whatsapp' || canal === 'les_deux' || !canal;
+  let ok = false;
+
+  // Telegram (si demandé et configuré)
+  if (wantTg && client?.telegram_chat_id && client?.telegram_actif) {
+    const tgOk = buttons?.length
+      ? await sendTelegramButtons(client.telegram_chat_id, body, buttons)
+      : await sendTelegramText(client.telegram_chat_id, body);
+    ok = ok || tgOk;
   }
-  // Défaut WhatsApp
-  if (client?.whatsapp_phone && client?.whatsapp_actif) {
+
+  // WhatsApp (si demandé et configuré)
+  if (wantWa && client?.whatsapp_phone && client?.whatsapp_actif) {
     if (buttons?.length) {
-      await sendWaButtons(client.whatsapp_phone, body, buttons);
+      const id = await sendWaButtons(client.whatsapp_phone, body, buttons);
+      ok = ok || !!id;
       // WA limite à 3 boutons : si 4e, on l'ajoute en texte
       if (buttons.length > 3) {
         const extras = buttons.slice(3).map((b, i) => `${i + 4}. ${b.title}`).join('\n');
         await sendWaText(client.whatsapp_phone, `Ou répondez :\n${extras}`);
       }
-      return true;
+    } else {
+      const id = await sendWaText(client.whatsapp_phone, body);
+      ok = ok || !!id;
     }
-    const id = await sendWaText(client.whatsapp_phone, body);
-    return !!id;
   }
-  return false;
+
+  return ok;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

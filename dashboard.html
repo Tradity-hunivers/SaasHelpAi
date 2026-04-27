@@ -3388,7 +3388,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                         <span className="small">WhatsApp actif</span>
                       </label>
                     </_AdminField>
-                    <_AdminField label="Telegram Chat ID" hint="L'artisan envoie un message au bot Telegram pour obtenir son ID.">
+                    <_AdminField label="Telegram Chat ID" hint="L'artisan envoie /start au bot HelpAi Agency → le bot lui répond avec son Chat ID. Copiez-le ici.">
                       <input className="search" type="text" placeholder="123456789"
                              style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
                              value={draft.telegram_chat_id || ""}
