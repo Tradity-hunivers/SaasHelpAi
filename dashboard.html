@@ -4897,6 +4897,7 @@ function ScreenCustomers() {
   const [filter, setFilter] = React.useState("all");
   const [statutFilter, setStatutFilter] = React.useState("all");
   const [openLeadId, setOpenLeadId] = React.useState(null);
+  const [newLeadOpen, setNewLeadOpen] = React.useState(false);
   const filteredCustomers = CUSTOMERS.filter(c => filter === "all" || c.status === filter);
 
   const sourceColors = {
@@ -4965,7 +4966,9 @@ function ScreenCustomers() {
             <span>Chercher un contact…</span>
           </div>
           <button className="btn"><Icon name="download" size={13}/> Export CSV</button>
-          <button className="btn primary"><Icon name="plus" size={14}/> Nouveau contact</button>
+          <button className="btn primary" onClick={() => setNewLeadOpen(true)}>
+            <Icon name="plus" size={14}/> Nouveau lead test
+          </button>
         </div>
       </div>
 
@@ -5169,6 +5172,143 @@ function ScreenCustomers() {
                          onClose={() => setOpenLeadId(null)}
                          onSaved={() => setOpenLeadId(null)}/>
       )}
+
+      {newLeadOpen && (
+        <NewLeadTestModal
+          clients={clients}
+          onClose={() => setNewLeadOpen(false)}
+          onCreated={() => { setNewLeadOpen(false); window.location.reload(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal de création de lead test — utile pour valider les workflows sans
+// passer par un formulaire externe. Insère directement dans agency_leads
+// → l'engine prendra le relais au prochain tick (5 min) ou via webhook.
+function NewLeadTestModal({ clients, onClose, onCreated }) {
+  const [draft, setDraft] = React.useState({
+    client_id: clients[0]?.id || "",
+    nom:       "Lead Test " + new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+    email:     "",
+    telephone: "+33612345678",
+    source:    "site",
+    message:   "Demande générée pour test de workflow",
+    statut:    "nouveau",
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError]   = React.useState(null);
+
+  async function create() {
+    setError(null);
+    if (!draft.client_id) { setError("Sélectionnez un artisan."); return; }
+    if (!draft.telephone) { setError("Le numéro de téléphone est requis."); return; }
+    setSaving(true);
+    const payload = {
+      client_id:  draft.client_id,
+      nom:        (draft.nom || "").trim() || null,
+      email:      (draft.email || "").trim() || null,
+      telephone:  (draft.telephone || "").trim(),
+      source:     draft.source || "site",
+      statut:     draft.statut || "nouveau",
+      message:    (draft.message || "").trim() || null,
+      metadata:   { test: true, created_via: "dashboard_test_button" },
+    };
+    const { error: err } = await sb.from("agency_leads").insert(payload);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    if (onCreated) onCreated();
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"grid", placeItems:"center", padding:24 }}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ width:"min(560px, 100%)", maxHeight:"90vh", display:"flex", flexDirection:"column",
+                    background:"var(--bg)", border:"1px solid var(--border)", borderRadius:14,
+                    boxShadow:"0 24px 60px rgba(0,0,0,0.55)" }}>
+        <div className="row between" style={{ padding:"14px 20px", borderBottom:"1px solid var(--border)" }}>
+          <div>
+            <strong style={{ fontSize:14 }}>+ Nouveau lead test</strong>
+            <div className="small muted" style={{ marginTop:2 }}>L'engine prendra le relais au prochain tick (≤ 5 min).</div>
+          </div>
+          <button className="btn icon ghost" onClick={onClose} title="Fermer">×</button>
+        </div>
+
+        <div style={{ flex:1, overflow:"auto", padding:20 }} className="stack-md">
+          <div className="stack-xs">
+            <label className="small muted">Artisan *</label>
+            <select className="search" style={{ width:"100%", minWidth:0, color:"var(--text-1)" }}
+                    value={draft.client_id} onChange={e => setDraft({ ...draft, client_id: e.target.value })}>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
+            </select>
+          </div>
+          <div className="grid g-2" style={{ gap:12 }}>
+            <div className="stack-xs">
+              <label className="small muted">Nom du prospect</label>
+              <input className="search" type="text" style={{ width:"100%", minWidth:0, color:"var(--text-1)" }}
+                     value={draft.nom} onChange={e => setDraft({ ...draft, nom: e.target.value })}/>
+            </div>
+            <div className="stack-xs">
+              <label className="small muted">Téléphone *</label>
+              <input className="search" type="tel" placeholder="+33612345678" style={{ width:"100%", minWidth:0, color:"var(--text-1)" }}
+                     value={draft.telephone} onChange={e => setDraft({ ...draft, telephone: e.target.value })}/>
+            </div>
+          </div>
+          <div className="stack-xs">
+            <label className="small muted">Email (optionnel)</label>
+            <input className="search" type="email" style={{ width:"100%", minWidth:0, color:"var(--text-1)" }}
+                   value={draft.email} onChange={e => setDraft({ ...draft, email: e.target.value })}/>
+          </div>
+          <div className="grid g-2" style={{ gap:12 }}>
+            <div className="stack-xs">
+              <label className="small muted">Source</label>
+              <select className="search" style={{ width:"100%", minWidth:0, color:"var(--text-1)" }}
+                      value={draft.source} onChange={e => setDraft({ ...draft, source: e.target.value })}>
+                <option value="site">Site web</option>
+                <option value="google_ads">Google Ads</option>
+                <option value="meta">Meta Ads</option>
+                <option value="gmb">GMB</option>
+                <option value="appel">Appel</option>
+                <option value="lsa">LSA</option>
+                <option value="autre">Autre</option>
+              </select>
+            </div>
+            <div className="stack-xs">
+              <label className="small muted">Statut initial</label>
+              <select className="search" style={{ width:"100%", minWidth:0, color:"var(--text-1)" }}
+                      value={draft.statut} onChange={e => setDraft({ ...draft, statut: e.target.value })}>
+                <option value="nouveau">Nouveau</option>
+                <option value="qualification_en_cours">Qualification en cours</option>
+                <option value="qualifie">Qualifié</option>
+              </select>
+            </div>
+          </div>
+          <div className="stack-xs">
+            <label className="small muted">Message du prospect (optionnel)</label>
+            <textarea className="search" rows={3} style={{ width:"100%", minWidth:0, color:"var(--text-1)", padding:"8px 12px", lineHeight:1.4 }}
+                      value={draft.message} onChange={e => setDraft({ ...draft, message: e.target.value })}/>
+          </div>
+
+          <div className="card" style={{ padding:"10px 12px", background:"var(--accent-soft)", borderColor:"var(--accent-border)" }}>
+            <div className="small" style={{ color:"var(--accent)", fontWeight:600, marginBottom:4 }}>⚡ Astuce</div>
+            <div className="small muted" style={{ lineHeight:1.5 }}>
+              Le lead est créé immédiatement en base. Selon les workflows actifs sur l'artisan, l'engine déclenchera (au prochain tick de 5 min) :
+              SMS de qualification, notif WA/Telegram à l'artisan, etc.
+              <br/>Tant que Twilio n'est pas branché, les SMS prospect échoueront silencieusement (logué dans <code className="code">agency_lead_conversations</code>).
+            </div>
+          </div>
+
+          {error && <div className="small" style={{ color:"var(--danger)" }}>{error}</div>}
+        </div>
+
+        <div className="row" style={{ padding:"10px 20px", borderTop:"1px solid var(--border-soft)", gap:8, justifyContent:"flex-end" }}>
+          <button className="btn" onClick={onClose} disabled={saving}>Annuler</button>
+          <button className="btn primary" onClick={create} disabled={saving}>
+            {saving ? "Création…" : "Créer le lead"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -6691,6 +6831,170 @@ const WORKFLOW_CATEGORIES = [
   ["Suivi",   "Suivi"],
 ];
 
+// Templates par défaut envoyés par l'engine v2 pour chaque workflow.
+// Doit rester aligné avec supabase/functions/agency-automation-engine/index.ts.
+// Variables : {{nom}}, {{nom_prefix}} (' Jean' ou ''), {{telephone}}, {{prestation}},
+//   {{source}}, {{ville}}, {{rdv_heure}}, {{montant}}, {{avis_url}}.
+const WORKFLOW_MESSAGES_DEFAULTS = {
+  sms_qualification_prospect: [
+    { canal: "SMS prospect", label: "Étape 1 — Question proprio", text: "Bonjour{{nom_prefix}}, merci pour votre demande !\n\nPour mieux comprendre votre besoin :\nÊtes-vous propriétaire ou locataire ?\n\nRépondez : PROPRIO ou LOCATAIRE" },
+    { canal: "SMS prospect", label: "Étape 2 — Prestation", text: "Merci. Pour quelle prestation nous contactez-vous ? (ex: toiture, plomberie, rénovation...)" },
+    { canal: "SMS prospect", label: "Étape 3 — Urgence", text: "Compris. Votre demande est-elle urgente ?\n1 - Urgent (moins de 7 jours)\n2 - Moyen terme (15-30 jours)\n3 - Projet futur" },
+    { canal: "SMS prospect", label: "Confirmation finale", text: "Merci pour ces informations. Nous revenons vers vous très rapidement !" },
+  ],
+  notif_lead_chaud_prio: [
+    { canal: "WA/TG artisan", label: "Lead chaud (proprio + urgent)", text: "🔴 *Nouveau lead PRIORITAIRE*\n\n👤 {{nom}}\n📞 {{telephone}}\n🏠 Propriétaire\n🔧 Besoin : {{prestation}}\n⏰ Urgence : Urgent < 7j\n📍 Source : {{source}}\n\n⚠️ À rappeler rapidement !" },
+  ],
+  appel_manque_relance: [
+    { canal: "SMS prospect", label: "SMS d'excuse", text: "Bonjour, je suis actuellement indisponible. Pouvez-vous me préciser votre besoin ? Je vous rappelle rapidement." },
+    { canal: "WA/TG artisan", label: "Notif appel manqué", text: "📞 Appel manqué de {{nom}} ({{telephone}})\nSource : {{source}}\n\nÀ rappeler rapidement." },
+  ],
+  post_appel_menu: [
+    { canal: "WA/TG artisan", label: "Menu après appel", text: "📞 Suite à l'appel avec *{{nom}}*, que s'est-il passé ?", buttons: ["📅 RDV pris", "📋 Devis à envoyer", "❌ Pas intéressant", "🔁 À rappeler"] },
+  ],
+  rdv_creation_via_sms: [
+    { canal: "WA/TG artisan", label: "Demande de date", text: "📅 Quelle date et heure pour le RDV ?\nExemple : *mardi 14h* ou *lundi 15 mai 10h30*" },
+    { canal: "WA/TG artisan", label: "Confirmation RDV créé", text: "✅ RDV créé : *lundi 15 mai à 14h30*\nLes rappels automatiques sont activés pour {{nom}}." },
+  ],
+  rdv_rappels_prospect: [
+    { canal: "SMS prospect", label: "J-1 (24h avant)", text: "RDV confirmé demain à {{rdv_heure}}.\nSi besoin de modifier, dites-le moi ici." },
+    { canal: "SMS prospect", label: "2h avant", text: "C'est toujours OK pour le RDV à {{rdv_heure}} ?\nRépondez OUI pour confirmer." },
+    { canal: "SMS prospect", label: "30 min avant", text: "Je suis disponible dans 30 minutes." },
+  ],
+  rdv_check_no_show: [
+    { canal: "WA/TG artisan", label: "Risque no-show (1h avant)", text: "⚠️ *{{nom}}* n'a pas confirmé le RDV de tout à l'heure.\nRisque de no-show — prévenez-vous." },
+    { canal: "WA/TG artisan", label: "Vérif post-RDV (30 min après)", text: "Le RDV avec *{{nom}}* a-t-il eu lieu ?", buttons: ["✅ Oui", "❌ No-show", "🔄 Reporté"] },
+  ],
+  no_show_relances: [
+    { canal: "SMS prospect", label: "Immédiat", text: "Je vous attendais pour notre RDV, tout va bien ?\nOn peut reprogrammer rapidement si besoin." },
+    { canal: "SMS prospect", label: "+2h", text: "Je reste disponible pour votre projet.\nDites-moi quand vous êtes disponible pour reprogrammer." },
+    { canal: "SMS prospect", label: "J+1", text: "Je me permets de revenir vers vous. Votre projet est-il toujours d'actualité ?" },
+  ],
+  devis_relances_prospect: [
+    { canal: "SMS prospect", label: "J+2", text: "Bonjour{{nom_prefix}}, avez-vous pu consulter le devis ?" },
+    { canal: "SMS prospect", label: "J+5", text: "Bonjour, je me permets de revenir vers vous concernant votre projet. Avez-vous des questions sur le devis ?" },
+    { canal: "SMS prospect", label: "J+15", text: "Bonjour, je me permets de faire une dernière relance concernant votre devis. Votre projet est-il toujours d'actualité ?" },
+  ],
+  devis_suivi_artisan: [
+    { canal: "WA/TG artisan", label: "Suivi devis (J+7)", text: "📋 Le devis de *{{nom}}* est-il signé ?", buttons: ["✅ Signé", "⏳ Pas encore", "❌ Perdu"] },
+  ],
+  montant_demande_post_signature: [
+    { canal: "WA/TG artisan", label: "Demande montant chantier", text: "🏆 Quel est le montant du chantier signé ? (en euros, ex: 3500)" },
+    { canal: "WA/TG artisan", label: "Confirmation montant", text: "✅ Montant enregistré : *{{montant}}* 💪" },
+  ],
+  satisfaction_post_chantier: [
+    { canal: "SMS prospect", label: "Demande de note", text: "Merci pour votre confiance.\n\nSur une échelle de 1 à 5, êtes-vous satisfait du travail réalisé ?\n\nRépondez avec le chiffre : 1, 2, 3, 4 ou 5" },
+    { canal: "SMS prospect", label: "Si note 4-5 (avis Google)", text: "Merci beaucoup ! Votre avis nous aiderait énormément :\n{{avis_url}}" },
+    { canal: "WA/TG artisan", label: "Si note 1-3 (alerte)", text: "⚠️ Client insatisfait !\n*{{nom}}* a donné une note de *2/5*.\nÀ recontacter rapidement." },
+  ],
+  relances_internes_artisan: [
+    { canal: "WA/TG artisan", label: "Lead non rappelé (24h)", text: "⚠️ Tu n'as pas encore traité le lead *{{nom}}*.\nPense à le rappeler rapidement." },
+    { canal: "WA/TG artisan", label: "Devis non envoyé (48h)", text: "📋 Tu avais un devis à envoyer à *{{nom}}*.\nEst-ce fait ?", buttons: ["✅ Oui, envoyé", "⏳ Pas encore"] },
+    { canal: "WA/TG artisan", label: "Chantier non confirmé (30j)", text: "🔧 Le chantier de *{{nom}}* est-il terminé ?", buttons: ["✅ Oui, terminé", "🔧 En cours"] },
+  ],
+  bilan_mensuel_auto: [
+    { canal: "SMS + email", label: "Récap mensuel artisan", text: "📊 Bilan {{mois}} — {{nom_artisan}}\n\nCA : {{ca}} €\nChantiers signés : {{nb_chantiers}}\nPanier moyen : {{panier_moyen}} €\nLeads : {{nb_leads}} | RDV : {{nb_rdv}}\n\nPlus de détails par email." },
+  ],
+};
+
+const PREVIEW_SAMPLE_VARS = {
+  nom:           "Jean Dupont",
+  nom_prefix:    " Jean",
+  telephone:     "+33 6 12 34 56 78",
+  prestation:    "rénovation de toiture",
+  source:        "Meta Ads",
+  ville:         "Sannois",
+  rdv_heure:     "14h30",
+  montant:       "5 200 €",
+  mois:          "Avril 2026",
+  nom_artisan:   "Bauer Couverture",
+  ca:            "12 400",
+  nb_chantiers:  "3",
+  panier_moyen:  "4 133",
+  nb_leads:      "28",
+  nb_rdv:        "12",
+  avis_url:      "https://g.page/r/CXxxxx/review",
+};
+
+function renderTemplate(text, vars) {
+  return (text || "").replace(/\{\{(\w+)\}\}/g, (_, key) => (vars && vars[key] != null ? vars[key] : ""));
+}
+
+function WorkflowPreviewModal({ workflow, onClose }) {
+  const messages = WORKFLOW_MESSAGES_DEFAULTS[workflow.slug] || [];
+  const [vars, setVars] = React.useState(PREVIEW_SAMPLE_VARS);
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"grid", placeItems:"center", padding:24 }}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ width:"min(720px, 100%)", maxHeight:"90vh", display:"flex", flexDirection:"column",
+                    background:"var(--bg)", border:"1px solid var(--border)", borderRadius:14,
+                    boxShadow:"0 24px 60px rgba(0,0,0,0.55)" }}>
+        <div className="row between" style={{ padding:"14px 20px", borderBottom:"1px solid var(--border)" }}>
+          <div style={{ minWidth:0, flex:1 }}>
+            <div className="row" style={{ gap:10, marginBottom:4 }}>
+              <div style={{ width:32, height:32, borderRadius:8, background:"var(--surface-2)", color:"var(--accent)", display:"grid", placeItems:"center", flexShrink:0 }}>
+                <Icon name={workflow.icon} size={15}/>
+              </div>
+              <strong style={{ fontSize:14 }}>Aperçu — {workflow.name}</strong>
+            </div>
+            <div className="small muted">Tous les messages que ce workflow enverrait, rendus avec un faux lead.</div>
+          </div>
+          <button className="btn icon ghost" onClick={onClose} title="Fermer">×</button>
+        </div>
+
+        <div style={{ padding:"12px 20px", borderBottom:"1px solid var(--border-soft)" }}>
+          <div className="small muted" style={{ marginBottom:8, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>Variables de test</div>
+          <div className="grid g-2" style={{ gap:8 }}>
+            {["nom","prestation","source","ville","rdv_heure","montant"].map(k => (
+              <div key={k} className="row" style={{ gap:8, alignItems:"center" }}>
+                <label className="small mono muted" style={{ width:80 }}>{`{{${k}}}`}</label>
+                <input className="search" type="text" style={{ flex:1, minWidth:0, height:26, fontSize:11.5 }}
+                       value={vars[k] || ""}
+                       onChange={e => setVars({ ...vars, [k]: e.target.value, ...(k === "nom" ? { nom_prefix: e.target.value ? " " + e.target.value.split(" ")[0] : "" } : {}) })}/>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ flex:1, overflow:"auto", padding:"14px 20px" }}>
+          {messages.length === 0 && (
+            <div className="muted small" style={{ textAlign:"center", padding:24 }}>
+              Aucun message défini pour ce workflow (logique gérée côté webhook conversationnel).
+            </div>
+          )}
+          {messages.map((m, i) => {
+            const rendered = renderTemplate(m.text, vars);
+            const isProspect = m.canal.toLowerCase().includes("prospect");
+            return (
+              <div key={i} className="card" style={{ marginBottom:10, padding:"10px 12px", background: isProspect ? "var(--accent-soft)" : "var(--surface-2)" }}>
+                <div className="row between" style={{ marginBottom:6 }}>
+                  <div className="small" style={{ fontWeight:600 }}>{m.label}</div>
+                  <span className={"tag " + (isProspect ? "accent" : "success")} style={{ fontSize:10 }}>{m.canal}</span>
+                </div>
+                <div style={{ fontSize:12.5, lineHeight:1.55, whiteSpace:"pre-wrap", color:"var(--text-1)" }}>
+                  {rendered}
+                </div>
+                {m.buttons && (
+                  <div className="row" style={{ gap:6, marginTop:8, flexWrap:"wrap" }}>
+                    {m.buttons.map((b, j) => (
+                      <span key={j} className="tag" style={{ fontSize:10, padding:"2px 8px", borderColor:"var(--accent-border)", color:"var(--accent)" }}>{b}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="row" style={{ padding:"10px 20px", borderTop:"1px solid var(--border-soft)", gap:8, justifyContent:"flex-end" }}>
+          <button className="btn" onClick={onClose}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Inverse de la map type → slug : pour un slug donné, liste des types de
 // agency_automation_log qui s'y rattachent. Permet de filtrer l'historique
 // d'un workflow donné.
@@ -6805,6 +7109,7 @@ function ScreenAutomations() {
   const [savingSlug, setSavingSlug] = React.useState(""); // slug en cours de save (pour spinner)
   const [tick, setTick] = React.useState(0);
   const [openWorkflow, setOpenWorkflow] = React.useState(null); // { slug, ... } pour la modal historique
+  const [previewWorkflow, setPreviewWorkflow] = React.useState(null); // { slug, ... } pour la modal aperçu
 
   // Charger les settings du client sélectionné
   React.useEffect(() => {
@@ -7007,15 +7312,25 @@ function ScreenAutomations() {
                       : <span className="tag"><span className="status-dot off"/> Désactivé</span>}
                   </td>
                   <td onClick={e => e.stopPropagation()}>
-                    <button
-                      className={"btn " + (enabled ? "" : "primary")}
-                      onClick={() => toggleWorkflow(w.slug, enabled)}
-                      disabled={savingSlug === w.slug}
-                      style={{ height: 28, fontSize: 11.5 }}
-                    >
-                      <Icon name={enabled ? "pause" : "play"} size={12}/>
-                      {savingSlug === w.slug ? "…" : (enabled ? "Désactiver" : "Activer")}
-                    </button>
+                    <div className="row" style={{ gap: 4 }}>
+                      <button
+                        className="btn icon ghost"
+                        onClick={() => setPreviewWorkflow(w)}
+                        title="Aperçu des messages"
+                        style={{ height: 28, width: 28 }}
+                      >
+                        <Icon name="eye" size={12}/>
+                      </button>
+                      <button
+                        className={"btn " + (enabled ? "" : "primary")}
+                        onClick={() => toggleWorkflow(w.slug, enabled)}
+                        disabled={savingSlug === w.slug}
+                        style={{ height: 28, fontSize: 11.5 }}
+                      >
+                        <Icon name={enabled ? "pause" : "play"} size={12}/>
+                        {savingSlug === w.slug ? "…" : (enabled ? "Désactiver" : "Activer")}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -7039,6 +7354,13 @@ function ScreenAutomations() {
           clientId={selClient}
           clientName={selectedClient ? selectedClient.nom : ""}
           onClose={() => setOpenWorkflow(null)}
+        />
+      )}
+
+      {previewWorkflow && (
+        <WorkflowPreviewModal
+          workflow={previewWorkflow}
+          onClose={() => setPreviewWorkflow(null)}
         />
       )}
     </div>
