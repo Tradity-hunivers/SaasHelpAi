@@ -2992,6 +2992,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
   const [autoLog, setAutoLog] = React.useState([]);
 
   const selected = allClients.find(c => c.id === selectedId) || null;
+  const [inviteOpen, setInviteOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!selected) { setCaRows([]); setAutoLog([]); return; }
@@ -3204,7 +3205,12 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
         <div className="card" style={{ maxHeight: 760, display: "flex", flexDirection: "column" }}>
           <div className="card-head">
             <div className="card-title">Portfolio</div>
-            <span className="tag">{filtered.length}</span>
+            <div className="row" style={{ gap: 6 }}>
+              <button className="btn primary" style={{ height: 26, fontSize: 11 }} onClick={() => setInviteOpen(true)} title="Inviter un nouvel artisan">
+                <Icon name="plus" size={11}/> Inviter
+              </button>
+              <span className="tag">{filtered.length}</span>
+            </div>
           </div>
           <div style={{ padding: "0 14px 10px" }}>
             <input className="search" style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)" }}
@@ -3889,11 +3895,365 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
           </div>
         );
       })()}
+
+      {inviteOpen && (
+        <InviteArtisanModal
+          onClose={() => setInviteOpen(false)}
+          onCreated={(newClient) => {
+            setInviteOpen(false);
+            setSelectedId(newClient.id);
+            if (onRefresh) onRefresh();
+            else window.location.reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wizard d'invitation d'un nouvel artisan — 4 étapes :
+//   1. Infos basiques (nom, email, secteur, ville)
+//   2. Canal de notification (whatsapp / telegram / les_deux + numéro)
+//   3. Tracking téléphonique (1 ou 2 numéros Twilio — info seulement à ce stade)
+//   4. Récap + création (auto-génère slug + webhook_secret + URL formulaire)
+// ─────────────────────────────────────────────────────────────────────────────
+function InviteArtisanModal({ onClose, onCreated }) {
+  const [step, setStep] = React.useState(1);
+  const [draft, setDraft] = React.useState({
+    nom:             "",
+    email:           "",
+    secteur:         "",
+    telephone:       "",
+    statut:          "actif",
+    canal_notif:     "whatsapp",
+    whatsapp_phone:  "",
+    whatsapp_actif:  true,
+    telegram_chat_id:"",
+    telegram_actif:  false,
+    avis_google_url: "",
+    twilio_phone:    "", // numéro Twilio principal (à renseigner après achat)
+    twilio_phone_ads:"", // optionnel, pour tracking ads séparé
+    notes_internes:  "",
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError]   = React.useState(null);
+  const [created, setCreated] = React.useState(null); // { client, webhook_url }
+
+  function slugify(s) {
+    return (s || "")
+      .toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      .slice(0, 40);
+  }
+
+  // Validation par étape
+  const canNext = step === 1 ? (draft.nom.trim() && draft.email.trim())
+                : step === 2 ? (draft.canal_notif && (draft.canal_notif === "telegram" ? draft.telegram_chat_id : draft.whatsapp_phone))
+                : step === 3 ? true
+                : true;
+
+  async function create() {
+    setError(null);
+    setSaving(true);
+    const slug = slugify(draft.nom) || ("client-" + Math.random().toString(36).slice(2, 8));
+    const webhook_secret = crypto.randomUUID();
+    const payload = {
+      nom:              draft.nom.trim(),
+      email:            draft.email.trim().toLowerCase(),
+      secteur:          draft.secteur.trim() || null,
+      telephone:        draft.telephone.trim() || null,
+      statut:           draft.statut,
+      slug,
+      webhook_secret,
+      canal_notif:      draft.canal_notif,
+      whatsapp_phone:   draft.whatsapp_phone.trim() || null,
+      whatsapp_actif:   !!draft.whatsapp_actif,
+      telegram_chat_id: draft.telegram_chat_id.trim() || null,
+      telegram_actif:   !!draft.telegram_actif,
+      avis_google_url:  draft.avis_google_url.trim() || null,
+      twilio_phone:     draft.twilio_phone.trim() || null,
+      twilio_phone_ads: draft.twilio_phone_ads.trim() || null,
+      notes_internes:   draft.notes_internes.trim() || null,
+    };
+    const { data, error: err } = await sb.from("agency_clients").insert(payload).select().single();
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    const webhook_url = "https://wodlupbffooqtshgasml.supabase.co/functions/v1/agency-lead-intake?slug=" + encodeURIComponent(slug);
+    setCreated({ client: data, webhook_url });
+  }
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+  }
+
+  // Vue de succès post-création
+  if (created) {
+    return (
+      <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"grid", placeItems:"center", padding:24 }}>
+        <div onClick={e => e.stopPropagation()}
+             style={{ width:"min(620px, 100%)", maxHeight:"90vh", overflow:"auto",
+                      background:"var(--bg)", border:"1px solid var(--border)", borderRadius:14,
+                      boxShadow:"0 24px 60px rgba(0,0,0,0.55)" }}>
+          <div className="row between" style={{ padding:"14px 20px", borderBottom:"1px solid var(--border)" }}>
+            <div>
+              <strong style={{ fontSize:14 }}>✅ {created.client.nom} ajouté !</strong>
+              <div className="small muted" style={{ marginTop:2 }}>14 workflows pré-activés (auto-seed) — slug "{created.client.slug}"</div>
+            </div>
+            <button className="btn icon ghost" onClick={() => onCreated(created.client)} title="Fermer">×</button>
+          </div>
+          <div style={{ padding: 20 }} className="stack-md">
+            <div className="card" style={{ padding: 14, background: "var(--accent-soft)", borderColor: "var(--accent-border)" }}>
+              <div className="small" style={{ fontWeight: 600, color: "var(--accent)", marginBottom: 6 }}>📡 URL du webhook formulaire</div>
+              <div className="small muted" style={{ marginBottom: 8, lineHeight: 1.5 }}>
+                À intégrer dans le formulaire de contact du site de <strong>{created.client.nom}</strong>. Chaque soumission créera un lead dans le CRM.
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="search" type="text" readOnly value={created.webhook_url}
+                       style={{ flex: 1, minWidth: 0, color: "var(--text-1)", fontFamily: "var(--font-mono)", fontSize: 11 }}/>
+                <button className="btn" style={{ height: 30 }} onClick={() => copyToClipboard(created.webhook_url)}>
+                  <Icon name="external" size={12}/> Copier
+                </button>
+              </div>
+            </div>
+            <div className="card" style={{ padding: 14, background: "var(--surface-2)" }}>
+              <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>🔐 Webhook secret</div>
+              <div className="small muted" style={{ marginBottom: 8, lineHeight: 1.5 }}>
+                À envoyer en header <code className="code">x-secret</code> ou param <code className="code">secret=</code> par le formulaire pour valider l'origine.
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <input className="search" type="text" readOnly value={created.client.webhook_secret}
+                       style={{ flex: 1, minWidth: 0, color: "var(--text-1)", fontFamily: "var(--font-mono)", fontSize: 11 }}/>
+                <button className="btn" style={{ height: 30 }} onClick={() => copyToClipboard(created.client.webhook_secret)}>
+                  <Icon name="external" size={12}/> Copier
+                </button>
+              </div>
+            </div>
+            <div className="small muted" style={{ lineHeight: 1.6 }}>
+              <strong style={{ color: "var(--text-1)" }}>Étapes suivantes :</strong>
+              <ol style={{ marginTop: 6, paddingLeft: 22, lineHeight: 1.6 }}>
+                <li>Configurer le formulaire de contact de l'artisan avec l'URL ci-dessus</li>
+                <li>Quand Twilio sera prêt : assigner un numéro à <code className="code">twilio_phone</code></li>
+                {draft.canal_notif === "telegram" && <li>Demander à l'artisan d'envoyer <code className="code">/start</code> au bot Telegram</li>}
+                <li>Vérifier les workflows actifs dans l'onglet Automations (par défaut tous activés)</li>
+              </ol>
+            </div>
+          </div>
+          <div className="row" style={{ padding: "10px 20px", borderTop: "1px solid var(--border-soft)", gap: 8, justifyContent: "flex-end" }}>
+            <button className="btn primary" onClick={() => onCreated(created.client)}>Voir la fiche client</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Wizard 4 étapes
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"grid", placeItems:"center", padding:24 }}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ width:"min(620px, 100%)", maxHeight:"92vh", display:"flex", flexDirection:"column",
+                    background:"var(--bg)", border:"1px solid var(--border)", borderRadius:14,
+                    boxShadow:"0 24px 60px rgba(0,0,0,0.55)" }}>
+        <div className="row between" style={{ padding:"14px 20px", borderBottom:"1px solid var(--border)" }}>
+          <div>
+            <strong style={{ fontSize:14 }}>+ Inviter un artisan</strong>
+            <div className="small muted" style={{ marginTop:2 }}>Étape {step} / 4</div>
+          </div>
+          <button className="btn icon ghost" onClick={onClose} title="Fermer">×</button>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border-soft)" }}>
+          <div className="progress"><div className="p-accent" style={{ width: (step / 4 * 100) + "%" }}/></div>
+          <div className="row between" style={{ marginTop: 6, fontSize: 10.5, color: "var(--text-3)" }}>
+            <span style={{ fontWeight: step === 1 ? 700 : 400, color: step >= 1 ? "var(--accent)" : "var(--text-3)" }}>1. Infos</span>
+            <span style={{ fontWeight: step === 2 ? 700 : 400, color: step >= 2 ? "var(--accent)" : "var(--text-3)" }}>2. Canal</span>
+            <span style={{ fontWeight: step === 3 ? 700 : 400, color: step >= 3 ? "var(--accent)" : "var(--text-3)" }}>3. Tracking</span>
+            <span style={{ fontWeight: step === 4 ? 700 : 400, color: step >= 4 ? "var(--accent)" : "var(--text-3)" }}>4. Récap</span>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflow: "auto", padding: 20 }} className="stack-md">
+
+          {/* ─── ÉTAPE 1 — Infos basiques ─── */}
+          {step === 1 && (
+            <>
+              <div className="stack-xs">
+                <label className="small muted">Nom de l'entreprise *</label>
+                <input className="search" type="text" placeholder="ex: Bauer Couverture"
+                       style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                       value={draft.nom} onChange={e => setDraft({ ...draft, nom: e.target.value })}/>
+                {draft.nom && <div className="small muted" style={{ fontSize: 10.5 }}>Slug auto-généré : <code className="code">{slugify(draft.nom)}</code></div>}
+              </div>
+              <div className="grid g-2" style={{ gap: 12 }}>
+                <div className="stack-xs">
+                  <label className="small muted">Email artisan *</label>
+                  <input className="search" type="email" placeholder="contact@bauer.fr"
+                         style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                         value={draft.email} onChange={e => setDraft({ ...draft, email: e.target.value })}/>
+                </div>
+                <div className="stack-xs">
+                  <label className="small muted">Téléphone perso</label>
+                  <input className="search" type="tel" placeholder="+33 6 12 34 56 78"
+                         style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                         value={draft.telephone} onChange={e => setDraft({ ...draft, telephone: e.target.value })}/>
+                </div>
+              </div>
+              <div className="stack-xs">
+                <label className="small muted">Secteur d'activité</label>
+                <input className="search" type="text" placeholder="ex: Couvreur / Plombier / Électricien"
+                       style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                       value={draft.secteur} onChange={e => setDraft({ ...draft, secteur: e.target.value })}/>
+              </div>
+              <div className="stack-xs">
+                <label className="small muted">Notes internes (optionnel)</label>
+                <textarea className="search" rows={2}
+                          style={{ width: "100%", minWidth: 0, color: "var(--text-1)", padding: "8px 12px", lineHeight: 1.4 }}
+                          value={draft.notes_internes} onChange={e => setDraft({ ...draft, notes_internes: e.target.value })}/>
+              </div>
+            </>
+          )}
+
+          {/* ─── ÉTAPE 2 — Canal de notification ─── */}
+          {step === 2 && (
+            <>
+              <div className="stack-xs">
+                <label className="small muted">Canal de notification *</label>
+                <div className="seg" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
+                  <button className={draft.canal_notif === "whatsapp" ? "active" : ""} onClick={() => setDraft({ ...draft, canal_notif: "whatsapp" })}>📱 WhatsApp</button>
+                  <button className={draft.canal_notif === "telegram" ? "active" : ""} onClick={() => setDraft({ ...draft, canal_notif: "telegram" })}>✈️ Telegram</button>
+                  <button className={draft.canal_notif === "les_deux" ? "active" : ""} onClick={() => setDraft({ ...draft, canal_notif: "les_deux" })}>📱 + ✈️ Les deux</button>
+                </div>
+              </div>
+
+              {(draft.canal_notif === "whatsapp" || draft.canal_notif === "les_deux") && (
+                <div className="card" style={{ padding: 12, background: "var(--surface-2)" }}>
+                  <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>📱 WhatsApp</div>
+                  <div className="stack-xs">
+                    <label className="small muted">Numéro WhatsApp (format international)</label>
+                    <input className="search" type="tel" placeholder="33612345678 (sans + ni espaces)"
+                           style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                           value={draft.whatsapp_phone} onChange={e => setDraft({ ...draft, whatsapp_phone: e.target.value })}/>
+                  </div>
+                  <label className="row" style={{ gap: 8, cursor: "pointer", marginTop: 8 }}>
+                    <input type="checkbox" checked={!!draft.whatsapp_actif} onChange={e => setDraft({ ...draft, whatsapp_actif: e.target.checked })}/>
+                    <span className="small">WhatsApp actif</span>
+                  </label>
+                </div>
+              )}
+
+              {(draft.canal_notif === "telegram" || draft.canal_notif === "les_deux") && (
+                <div className="card" style={{ padding: 12, background: "var(--surface-2)" }}>
+                  <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>✈️ Telegram</div>
+                  <div className="small muted" style={{ marginBottom: 8, lineHeight: 1.5 }}>
+                    L'artisan doit envoyer <code className="code">/start</code> au bot HelpAi Agency. Le bot lui répondra avec son <strong>Chat ID</strong> à coller ici.
+                  </div>
+                  <div className="stack-xs">
+                    <label className="small muted">Telegram Chat ID</label>
+                    <input className="search" type="text" placeholder="123456789"
+                           style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                           value={draft.telegram_chat_id} onChange={e => setDraft({ ...draft, telegram_chat_id: e.target.value })}/>
+                  </div>
+                  <label className="row" style={{ gap: 8, cursor: "pointer", marginTop: 8 }}>
+                    <input type="checkbox" checked={!!draft.telegram_actif} onChange={e => setDraft({ ...draft, telegram_actif: e.target.checked })}/>
+                    <span className="small">Telegram actif</span>
+                  </label>
+                </div>
+              )}
+
+              <div className="stack-xs">
+                <label className="small muted">URL avis Google (pour les SMS de satisfaction)</label>
+                <input className="search" type="url" placeholder="https://g.page/r/CXxxxx/review"
+                       style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                       value={draft.avis_google_url} onChange={e => setDraft({ ...draft, avis_google_url: e.target.value })}/>
+              </div>
+            </>
+          )}
+
+          {/* ─── ÉTAPE 3 — Tracking téléphonique ─── */}
+          {step === 3 && (
+            <>
+              <div className="card" style={{ padding: 14, background: "var(--accent-soft)", borderColor: "var(--accent-border)" }}>
+                <div className="small" style={{ color: "var(--accent)", fontWeight: 600, marginBottom: 6 }}>📞 Numéros Twilio</div>
+                <div className="small muted" style={{ lineHeight: 1.6 }}>
+                  Tu peux laisser ces champs <strong>vides pour l'instant</strong> et les renseigner plus tard une fois Twilio activé. L'engine fonctionnera en mode dégradé (sans missed call detection ni SMS prospect) jusqu'à ce que tu les ajoutes.
+                </div>
+              </div>
+              <div className="stack-xs">
+                <label className="small muted">Numéro Twilio principal (NAP — site + GMB)</label>
+                <input className="search" type="tel" placeholder="+33939246254"
+                       style={{ width: "100%", minWidth: 0, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+                       value={draft.twilio_phone} onChange={e => setDraft({ ...draft, twilio_phone: e.target.value })}/>
+                <div className="small muted" style={{ fontSize: 10.5 }}>Sera utilisé pour la voix (forward vers tél perso) et les SMS prospects.</div>
+              </div>
+              <div className="stack-xs">
+                <label className="small muted">Numéro Twilio Ads (optionnel — Meta/Google Ads)</label>
+                <input className="search" type="tel" placeholder="+33939246299"
+                       style={{ width: "100%", minWidth: 0, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+                       value={draft.twilio_phone_ads} onChange={e => setDraft({ ...draft, twilio_phone_ads: e.target.value })}/>
+                <div className="small muted" style={{ fontSize: 10.5 }}>Si renseigné, les appels sur ce numéro seront tagués <code className="code">source=google_ads</code> automatiquement.</div>
+              </div>
+            </>
+          )}
+
+          {/* ─── ÉTAPE 4 — Récap ─── */}
+          {step === 4 && (
+            <>
+              <div className="card" style={{ padding: 14 }}>
+                <div className="small" style={{ fontWeight: 600, marginBottom: 10, fontSize: 12.5 }}>Récapitulatif</div>
+                <table className="data" style={{ fontSize: 12 }}>
+                  <tbody>
+                    <tr><td className="muted">Nom</td><td><strong>{draft.nom || "—"}</strong></td></tr>
+                    <tr><td className="muted">Email</td><td>{draft.email || "—"}</td></tr>
+                    <tr><td className="muted">Slug</td><td><code className="code">{slugify(draft.nom)}</code></td></tr>
+                    <tr><td className="muted">Secteur</td><td>{draft.secteur || "—"}</td></tr>
+                    <tr><td className="muted">Téléphone perso</td><td>{draft.telephone || "—"}</td></tr>
+                    <tr><td className="muted">Canal notif</td><td>
+                      {draft.canal_notif === "whatsapp" ? "📱 WhatsApp"
+                       : draft.canal_notif === "telegram" ? "✈️ Telegram"
+                       : "📱 + ✈️ Les deux"}
+                    </td></tr>
+                    {draft.whatsapp_phone && <tr><td className="muted">WhatsApp</td><td className="mono">{draft.whatsapp_phone}</td></tr>}
+                    {draft.telegram_chat_id && <tr><td className="muted">Telegram Chat ID</td><td className="mono">{draft.telegram_chat_id}</td></tr>}
+                    {draft.twilio_phone && <tr><td className="muted">Numéro Twilio principal</td><td className="mono">{draft.twilio_phone}</td></tr>}
+                    {draft.twilio_phone_ads && <tr><td className="muted">Numéro Twilio Ads</td><td className="mono">{draft.twilio_phone_ads}</td></tr>}
+                    {draft.avis_google_url && <tr><td className="muted">URL avis Google</td><td><a href={draft.avis_google_url} target="_blank" rel="noopener" className="small" style={{ color: "var(--accent)" }}>Lien ↗</a></td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              <div className="card" style={{ padding: 12, background: "var(--accent-soft)", borderColor: "var(--accent-border)" }}>
+                <div className="small" style={{ color: "var(--accent)", fontWeight: 600, marginBottom: 6 }}>🎯 À la création</div>
+                <ul className="small muted" style={{ paddingLeft: 18, lineHeight: 1.7 }}>
+                  <li>14 workflows pré-activés (auto-seed via trigger DB)</li>
+                  <li>Webhook secret généré (UUID v4)</li>
+                  <li>URL du webhook formulaire affichée pour intégration sur le site</li>
+                  <li>L'artisan peut être ajouté dans Supabase Auth ensuite (pour qu'il accède à son espace client)</li>
+                </ul>
+              </div>
+              {error && <div className="small" style={{ color: "var(--danger)" }}>{error}</div>}
+            </>
+          )}
+        </div>
+
+        <div className="row" style={{ padding: "10px 20px", borderTop: "1px solid var(--border-soft)", gap: 8, justifyContent: "space-between" }}>
+          <button className="btn ghost" onClick={() => step > 1 ? setStep(step - 1) : onClose()} disabled={saving}>
+            {step > 1 ? "← Précédent" : "Annuler"}
+          </button>
+          {step < 4 ? (
+            <button className="btn primary" onClick={() => setStep(step + 1)} disabled={!canNext}>Suivant →</button>
+          ) : (
+            <button className="btn primary" onClick={create} disabled={saving || !canNext}>
+              {saving ? "Création…" : "✅ Créer l'artisan"}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 window.ScreenClientsAdmin = ScreenClientsAdmin;
+window.InviteArtisanModal = InviteArtisanModal;
 
 /* ============ Mon compte ============ */
 function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
