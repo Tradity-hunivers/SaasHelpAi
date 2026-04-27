@@ -5173,6 +5173,108 @@ function ScreenCustomers() {
   );
 }
 
+// Timeline du cycle de vie d'un lead — affichée en haut de LeadDetailModal.
+// 7 étapes : Reçu → Qualifié → RDV → Devis → Signé → Chantier → Avis.
+// Si lead en statut 'perdu' / 'no_show' / 'devis_perdu' → badge rouge en bout de chaîne.
+function LeadLifecycle({ lead }) {
+  const FAILED = { perdu: "Perdu", devis_perdu: "Devis perdu", no_show: "No-show", desinscrit: "Désinscrit" };
+  const failed = FAILED[lead.statut];
+
+  const STEPS = [
+    {
+      key: "recu", label: "Reçu", icon: "📥",
+      date: lead.created_at,
+      done: true,
+      current: ["nouveau", "qualification_en_cours"].includes(lead.statut),
+    },
+    {
+      key: "qualif", label: "Qualifié", icon: "✅",
+      date: lead.qualifie ? lead.updated_at : null,
+      done: !!lead.qualifie,
+      current: lead.statut === "qualifie" || lead.statut === "contacté",
+    },
+    {
+      key: "rdv", label: "RDV", icon: "📅",
+      date: lead.rdv_datetime,
+      done: lead.statut === "rdv_effectue" || !!lead.devis_envoye_le || ["devis_a_envoyer", "devis_envoye", "devis_signe", "chantier_en_cours", "chantier_termine"].includes(lead.statut),
+      current: lead.statut === "rdv_pris" || lead.statut === "rdv_effectue",
+    },
+    {
+      key: "devis", label: "Devis", icon: "📋",
+      date: lead.devis_envoye_le,
+      done: !!lead.devis_envoye_le && lead.statut !== "devis_a_envoyer",
+      current: lead.statut === "devis_envoye" || lead.statut === "devis_a_envoyer",
+    },
+    {
+      key: "signe", label: "Signé", icon: "✍️",
+      date: ["devis_signe", "chantier_en_cours", "chantier_termine"].includes(lead.statut) ? lead.updated_at : null,
+      done: ["devis_signe", "chantier_en_cours", "chantier_termine"].includes(lead.statut),
+      current: lead.statut === "devis_signe",
+    },
+    {
+      key: "chantier", label: "Chantier", icon: "🔨",
+      date: lead.statut === "chantier_termine" ? lead.updated_at : null,
+      done: lead.statut === "chantier_termine",
+      current: lead.statut === "chantier_en_cours",
+    },
+    {
+      key: "avis", label: "Avis", icon: "⭐",
+      date: lead.satisfaction_note ? lead.updated_at : null,
+      done: !!lead.satisfaction_note,
+      current: lead.statut === "chantier_termine" && lead.avis_demande && !lead.satisfaction_note,
+      extra: lead.satisfaction_note ? `${lead.satisfaction_note}/5` : null,
+    },
+  ];
+
+  return (
+    <div className="card" style={{ padding: "14px 12px", marginBottom: 16, background: "var(--bg-2)" }}>
+      <div className="row between" style={{ marginBottom: 10, alignItems: "center" }}>
+        <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>Cycle de vie</div>
+        {failed && <span className="tag danger" style={{ fontSize: 10.5 }}>❌ {failed}</span>}
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 0, overflowX: "auto", padding: "4px 0" }}>
+        {STEPS.map((step, i) => {
+          const isDone    = step.done && !failed;
+          const isCurrent = step.current && !failed;
+          const color = isDone ? "var(--success)" : isCurrent ? "var(--accent)" : "var(--text-4)";
+          const bg    = isDone ? "oklch(0.78 0.13 155 / 0.12)" : isCurrent ? "var(--accent-soft)" : "var(--surface-2)";
+          const border= isDone ? "var(--success)" : isCurrent ? "var(--accent-border)" : "var(--border-soft)";
+          return (
+            <React.Fragment key={step.key}>
+              <div style={{ minWidth: 78, maxWidth: 110, textAlign: "center", flexShrink: 0 }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 12,
+                  background: bg, border: "1px solid " + border,
+                  display: "grid", placeItems: "center",
+                  margin: "0 auto", fontSize: 16,
+                  filter: failed && !isDone ? "grayscale(0.7) opacity(0.5)" : "none",
+                }}>{step.icon}</div>
+                <div className="small" style={{ marginTop: 6, color, fontWeight: isDone || isCurrent ? 600 : 400, fontSize: 11 }}>{step.label}</div>
+                {step.date && (
+                  <div className="mono" style={{ fontSize: 9.5, color: "var(--text-3)", marginTop: 1 }}>
+                    {new Date(step.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
+                  </div>
+                )}
+                {step.extra && (
+                  <div className="mono" style={{ fontSize: 10, color: "var(--success)", marginTop: 1, fontWeight: 600 }}>{step.extra}</div>
+                )}
+              </div>
+              {i < STEPS.length - 1 && (
+                <div style={{
+                  flex: 1, minWidth: 14, height: 2,
+                  background: isDone ? "var(--success)" : "var(--border)",
+                  alignSelf: "flex-start", marginTop: 17,
+                  opacity: failed ? 0.4 : 1,
+                }}/>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function LeadDetailModal({ lead, clientName, onClose, onSaved }) {
   const [draft, setDraft] = React.useState({
     statut: lead.statut || "nouveau",
@@ -5248,6 +5350,9 @@ function LeadDetailModal({ lead, clientName, onClose, onSaved }) {
         </div>
 
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+          {/* Cycle de vie — timeline en haut du modal */}
+          <LeadLifecycle lead={lead}/>
+
           {/* Qualification block */}
           {(lead.qualifie || draft.qualifie) && (
             <div className="card" style={{ padding: 14, marginBottom: 16, borderColor: "var(--accent-border)", background: "var(--accent-soft)" }}>
@@ -6586,6 +6691,110 @@ const WORKFLOW_CATEGORIES = [
   ["Suivi",   "Suivi"],
 ];
 
+// Inverse de la map type → slug : pour un slug donné, liste des types de
+// agency_automation_log qui s'y rattachent. Permet de filtrer l'historique
+// d'un workflow donné.
+const SLUG_TO_TYPES = {
+  sms_qualification_prospect:    ["sms_qual_1", "sms_qual_2"],
+  notif_lead_chaud_prio:         [],  // déclenché par wa-webhook étape 3, pas dans automation_log
+  appel_manque_relance:          ["appel_manque_sms"],
+  post_appel_menu:               ["post_appel"],
+  rdv_creation_via_sms:          [],  // gérée par wa-webhook (parseRdvDate)
+  rdv_rappels_prospect:          ["rdv_rappel_j1", "rdv_rappel_2h", "rdv_rappel_30m"],
+  rdv_check_no_show:             ["rdv_noshow_risk", "noshow_check"],
+  no_show_relances:              ["noshow_immediat", "noshow_2h", "noshow_j1"],
+  devis_relances_prospect:       ["devis_relance_j2", "devis_relance_j5", "devis_relance_j15"],
+  devis_suivi_artisan:           ["suivi_devis_artisan"],
+  montant_demande_post_signature:[],  // suite du flow devis_signe (wa-webhook)
+  satisfaction_post_chantier:    ["satisfaction"],
+  relances_internes_artisan:     ["artisan_relance_24h", "artisan_devis_rappel", "artisan_chantier_check"],
+  bilan_mensuel_auto:            ["bilan_mensuel"],
+};
+
+function WorkflowRunsModal({ workflow, clientId, clientName, onClose }) {
+  const [rows, setRows]       = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const types = SLUG_TO_TYPES[workflow.slug] || [];
+
+  React.useEffect(() => {
+    setLoading(true);
+    let q = sb.from("agency_automation_log")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (clientId) q = q.eq("client_id", clientId);
+    if (types.length) q = q.in("type", types);
+    q.then(({ data, error }) => {
+      setLoading(false);
+      if (!error) setRows(data || []);
+    });
+  }, [workflow.slug, clientId]);
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"grid", placeItems:"center", padding:24 }}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ width:"min(820px, 100%)", maxHeight:"86vh", display:"flex", flexDirection:"column",
+                    background:"var(--bg)", border:"1px solid var(--border)", borderRadius:14,
+                    boxShadow:"0 24px 60px rgba(0,0,0,0.55)" }}>
+        <div className="row between" style={{ padding:"14px 20px", borderBottom:"1px solid var(--border)" }}>
+          <div style={{ minWidth:0, flex:1 }}>
+            <div className="row" style={{ gap:10, marginBottom:4 }}>
+              <div style={{ width:32, height:32, borderRadius:8, background:"var(--surface-2)", color:"var(--accent)", display:"grid", placeItems:"center", flexShrink:0 }}>
+                <Icon name={workflow.icon} size={15}/>
+              </div>
+              <strong style={{ fontSize:14 }}>{workflow.name}</strong>
+            </div>
+            <div className="small muted">{clientName} · {workflow.trigger}</div>
+          </div>
+          <button className="btn icon ghost" onClick={onClose} title="Fermer">×</button>
+        </div>
+
+        <div style={{ flex:1, overflow:"auto", padding:"14px 18px" }}>
+          {loading && <div className="muted small" style={{ textAlign:"center", padding:20 }}>Chargement…</div>}
+          {!loading && rows.length === 0 && (
+            <div className="muted small" style={{ textAlign:"center", padding:24 }}>
+              Aucune exécution enregistrée pour ce workflow.
+              {types.length === 0 && (
+                <div style={{ marginTop:8, fontSize:11 }}>
+                  Ce workflow n'est pas tracé dans <code className="code">agency_automation_log</code> (déclenché côté webhook conversation).
+                </div>
+              )}
+            </div>
+          )}
+          {!loading && rows.length > 0 && (
+            <table className="data">
+              <thead>
+                <tr><th>Date</th><th>Action</th><th>Cible</th><th>Statut</th><th>Détail</th></tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id}>
+                    <td className="mono small muted">{r.created_at ? new Date(r.created_at).toLocaleString("fr-FR") : "—"}</td>
+                    <td className="small">{(r.type || "—").replace(/_/g, " ")}</td>
+                    <td className="small">
+                      {r.cible === "prospect" ? <span className="tag accent">→ Prospect</span>
+                       : r.cible === "artisan" ? <span className="tag success">→ Artisan</span>
+                       : <span className="muted">{r.cible || "—"}</span>}
+                    </td>
+                    <td className="small">
+                      {r.statut === "ok" || r.statut === "envoye" || !r.statut
+                        ? <span style={{ color:"var(--success)" }}>{r.statut || "ok"}</span>
+                        : r.statut === "echec"
+                        ? <span style={{ color:"var(--danger)" }}>{r.statut}</span>
+                        : <span className="muted">{r.statut}</span>}
+                    </td>
+                    <td className="small muted">{r.detail || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ScreenAutomations() {
   const clients = window.__HELPAI_CLIENTS_ROWS || [];
   const [selClient, setSelClient] = React.useState(clients[0] && clients[0].id || "");
@@ -6595,6 +6804,7 @@ function ScreenAutomations() {
   const [loading, setLoading] = React.useState(false);
   const [savingSlug, setSavingSlug] = React.useState(""); // slug en cours de save (pour spinner)
   const [tick, setTick] = React.useState(0);
+  const [openWorkflow, setOpenWorkflow] = React.useState(null); // { slug, ... } pour la modal historique
 
   // Charger les settings du client sélectionné
   React.useEffect(() => {
@@ -6772,7 +6982,7 @@ function ScreenAutomations() {
               const enabled = setting ? setting.enabled : true; // défaut activé
               const st = stats[w.slug] || { runs30j: 0 };
               return (
-                <tr key={w.slug}>
+                <tr key={w.slug} style={{ cursor: "pointer" }} onClick={() => setOpenWorkflow(w)} title="Voir l'historique d'exécution">
                   <td>
                     <div className="row" style={{ gap: 10, alignItems: "flex-start" }}>
                       <div style={{ width: 32, height: 32, borderRadius: 8, background: "var(--surface-2)", color: "var(--accent)", display: "grid", placeItems: "center", flexShrink: 0 }}>
@@ -6796,7 +7006,7 @@ function ScreenAutomations() {
                       ? <span className="tag success"><span className="status-dot ok"/> Actif</span>
                       : <span className="tag"><span className="status-dot off"/> Désactivé</span>}
                   </td>
-                  <td>
+                  <td onClick={e => e.stopPropagation()}>
                     <button
                       className={"btn " + (enabled ? "" : "primary")}
                       onClick={() => toggleWorkflow(w.slug, enabled)}
@@ -6820,10 +7030,17 @@ function ScreenAutomations() {
       </div>
 
       <div className="small muted" style={{ textAlign: "center", padding: "0 16px" }}>
-        Les modifications sont sauvegardées en temps réel dans <code className="code">agency_workflow_settings</code>.
-        L'engine <code className="code">agency-automation-engine</code> lit ces toggles à chaque tick.
-        L'historique d'exécution est dans le <strong>Journal des automations</strong>.
+        Cliquez sur une ligne pour voir l'<strong>historique d'exécution</strong>. Les toggles sont sauvegardés temps réel dans <code className="code">agency_workflow_settings</code>.
       </div>
+
+      {openWorkflow && (
+        <WorkflowRunsModal
+          workflow={openWorkflow}
+          clientId={selClient}
+          clientName={selectedClient ? selectedClient.nom : ""}
+          onClose={() => setOpenWorkflow(null)}
+        />
+      )}
     </div>
   );
 }
