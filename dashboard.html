@@ -2307,6 +2307,9 @@ function ScreenOverview() {
       {/* ── Funnel + stats par source — données réelles agency_leads ── */}
       <LeadFunnelAndSourceStats/>
 
+      {/* ── Comparaison performance par artisan ── */}
+      <ArtisansComparisonTable/>
+
       <div className="grid g-2-1">
         <div className="card">
           <div className="card-head">
@@ -2726,10 +2729,152 @@ function LeadFunnelAndSourceStats() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tableau comparatif des artisans — visible côté admin uniquement.
+// Colonnes : artisan / leads / qualifiés / signés / CA / ticket moy. / win rate / source top / mini-funnel.
+// Triable au clic sur une colonne.
+// ─────────────────────────────────────────────────────────────────────────────
+function ArtisansComparisonTable() {
+  const allLeads = window.__HELPAI_LEADS_ROWS || [];
+  const clients  = window.__HELPAI_CLIENTS_ROWS || [];
+  const [sortKey, setSortKey] = React.useState("ca");
+  const [sortDir, setSortDir] = React.useState("desc");
+
+  const rows = React.useMemo(() => {
+    return clients.map(c => {
+      const cLeads      = allLeads.filter(l => l.client_id === c.id);
+      const total       = cLeads.length;
+      const qualifies   = cLeads.filter(l => l.qualifie || LEAD_PROGRESSED.qualifie.includes(l.statut)).length;
+      const rdvPris     = cLeads.filter(l => !!l.rdv_datetime || LEAD_PROGRESSED.rdv_planifie.includes(l.statut)).length;
+      const devisEnv    = cLeads.filter(l => !!l.devis_envoye_le || LEAD_PROGRESSED.devis_envoye.includes(l.statut)).length;
+      const signed      = cLeads.filter(l => LEAD_PROGRESSED.signe.includes(l.statut)).length;
+      const chantierOk  = cLeads.filter(l => l.statut === "chantier_termine").length;
+      const ca          = cLeads.reduce((s, l) => s + (l.montant_chantier || 0), 0) / 100;
+      const ticket      = signed > 0 ? Math.round(ca / signed) : 0;
+      const winRate     = total > 0 ? (signed / total) * 100 : 0;
+      // Source top
+      const srcCount = {};
+      cLeads.forEach(l => { const s = l.source || "autre"; srcCount[s] = (srcCount[s] || 0) + 1; });
+      const topSrc = Object.entries(srcCount).sort((a, b) => b[1] - a[1])[0];
+      return {
+        id:        c.id,
+        nom:       c.nom || "—",
+        secteur:   c.secteur || "—",
+        statut:    c.statut || "—",
+        total, qualifies, rdvPris, devisEnv, signed, chantierOk,
+        ca, ticket, winRate,
+        topSrc: topSrc ? { src: topSrc[0], count: topSrc[1] } : null,
+      };
+    });
+  }, [allLeads, clients]);
+
+  const sorted = React.useMemo(() => {
+    return rows.slice().sort((a, b) => {
+      const va = a[sortKey], vb = b[sortKey];
+      if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
+      return sortDir === "asc" ? String(va).localeCompare(vb) : String(vb).localeCompare(va);
+    });
+  }, [rows, sortKey, sortDir]);
+
+  function toggleSort(key) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(typeof rows[0]?.[key] === "number" ? "desc" : "asc"); }
+  }
+  const ind = (key) => sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+
+  if (clients.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">🏗️ Comparaison des artisans</div>
+          <div className="card-sub">Performance individuelle — clique sur une colonne pour trier</div>
+        </div>
+        <span className="tag">{rows.length} artisan{rows.length > 1 ? "s" : ""}</span>
+      </div>
+      <div style={{ padding: 0, overflow: "auto" }}>
+        <table className="data" style={{ minWidth: 900 }}>
+          <thead>
+            <tr>
+              <th onClick={() => toggleSort("nom")} style={{ cursor: "pointer", userSelect: "none" }}>Artisan{ind("nom")}</th>
+              <th onClick={() => toggleSort("total")} style={{ cursor: "pointer", userSelect: "none" }}>Leads{ind("total")}</th>
+              <th onClick={() => toggleSort("qualifies")} style={{ cursor: "pointer", userSelect: "none" }}>Qual.{ind("qualifies")}</th>
+              <th onClick={() => toggleSort("signed")} style={{ cursor: "pointer", userSelect: "none" }}>Signés{ind("signed")}</th>
+              <th onClick={() => toggleSort("ca")} style={{ cursor: "pointer", userSelect: "none" }}>CA{ind("ca")}</th>
+              <th onClick={() => toggleSort("ticket")} style={{ cursor: "pointer", userSelect: "none" }}>Ticket{ind("ticket")}</th>
+              <th onClick={() => toggleSort("winRate")} style={{ cursor: "pointer", userSelect: "none" }}>Win rate{ind("winRate")}</th>
+              <th>Source top</th>
+              <th style={{ width: 180 }}>Mini-funnel</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 && <tr><td colSpan={9} className="muted small" style={{ textAlign: "center", padding: 16 }}>Aucun artisan.</td></tr>}
+            {sorted.map(r => {
+              // Mini-funnel : 5 segments proportionnels
+              const max = Math.max(1, r.total);
+              const segs = [r.total, r.qualifies, r.rdvPris, r.devisEnv, r.signed];
+              const segColors = ["var(--text-3)", "var(--info)", "var(--accent)", "var(--accent-2)", "var(--success)"];
+              const tagCls = r.statut === "actif" ? "success" : r.statut === "pause" ? "accent" : "danger";
+              return (
+                <tr key={r.id}>
+                  <td>
+                    <div className="row" style={{ gap: 8, alignItems: "center" }}>
+                      <span className={"tag " + tagCls} style={{ fontSize: 9, padding: "1px 5px", width: 8, height: 8, borderRadius: "50%", display: "inline-block" }}/>
+                      <div>
+                        <strong>{r.nom}</strong>
+                        <div className="small muted" style={{ fontSize: 10.5 }}>{r.secteur}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="mono">{r.total}</td>
+                  <td className="mono">{r.qualifies}</td>
+                  <td className="mono"><strong>{r.signed}</strong></td>
+                  <td className="mono">{r.ca > 0 ? r.ca.toLocaleString("fr-FR") + " €" : "—"}</td>
+                  <td className="mono">{r.ticket > 0 ? r.ticket.toLocaleString("fr-FR") + " €" : "—"}</td>
+                  <td className="mono" style={{ color: r.winRate > 30 ? "var(--success)" : r.winRate > 10 ? "var(--accent)" : "var(--text-3)" }}>
+                    {r.winRate.toFixed(1)}%
+                  </td>
+                  <td className="small">
+                    {r.topSrc
+                      ? <span className="row" style={{ gap: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: SOURCE_COLOR[r.topSrc.src] || "var(--text-3)" }}/>
+                          {SOURCE_LABEL[r.topSrc.src] || r.topSrc.src} <span className="muted">({r.topSrc.count})</span>
+                        </span>
+                      : <span className="muted">—</span>}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 2, height: 18, alignItems: "center" }}>
+                      {segs.map((s, i) => (
+                        <div key={i}
+                             style={{
+                               flex: 1, minWidth: 4,
+                               height: Math.max(4, (s / max) * 16),
+                               background: segColors[i],
+                               opacity: s > 0 ? 0.85 : 0.15,
+                               borderRadius: 2,
+                             }}
+                             title={["Reçus","Qualifiés","RDV","Devis","Signés"][i] + ": " + s}/>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 window.ScreenOverview = ScreenOverview;
 window.ScreenAcquisition = ScreenAcquisition;
 window.KpiCard = KpiCard;
 window.LeadFunnelAndSourceStats = LeadFunnelAndSourceStats;
+window.ArtisansComparisonTable = ArtisansComparisonTable;
 
   </script>
 
