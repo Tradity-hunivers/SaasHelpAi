@@ -3267,6 +3267,64 @@ function _AdminSection({ title, children }) {
   );
 }
 
+// Bouton "Importer les factures Stripe" — backfill historique via l'edge
+// function agency-stripe-sync-historical. Appelable seulement si le client
+// a un stripe_customer_id en base (déjà sauvegardé, pas le draft local).
+function StripeBackfillButton({ client }) {
+  const [running, setRunning] = React.useState(false);
+  const [feedback, setFeedback] = React.useState(null);
+
+  const stripeId = client && client.stripe_customer_id;
+  if (!stripeId) {
+    return (
+      <div className="small muted" style={{ fontSize: 10.5 }}>
+        💡 Sauvegarde d'abord le Stripe Customer ID puis recharge la fiche pour activer le bouton d'import.
+      </div>
+    );
+  }
+
+  async function backfill() {
+    setRunning(true);
+    setFeedback(null);
+    try {
+      const { data, error } = await sb.functions.invoke("agency-stripe-sync-historical", {
+        body: { client_id: client.id, limit: 100 },
+      });
+      if (error) {
+        setFeedback({ type: "error", text: error.message || String(error) });
+      } else if (data && data.error) {
+        setFeedback({ type: "error", text: data.error });
+      } else {
+        const n = data?.total || 0;
+        setFeedback({ type: "success", text: `✅ ${n} facture${n > 1 ? "s" : ""} importée${n > 1 ? "s" : ""} depuis Stripe.` });
+      }
+    } catch (e) {
+      setFeedback({ type: "error", text: String(e) });
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <button className="btn primary" onClick={backfill} disabled={running} style={{ height: 28, fontSize: 11.5 }}>
+        <Icon name="download" size={12}/> {running ? "Import en cours…" : "Importer les factures Stripe"}
+      </button>
+      <span className="small muted" style={{ fontSize: 10.5 }}>
+        Récupère les 100 dernières factures de <code className="code" style={{ fontSize: 10 }}>{stripeId}</code> via l'API Stripe.
+      </span>
+      {feedback && (
+        <div className="small" style={{
+          color: feedback.type === "error" ? "var(--danger)" : "var(--success)",
+          fontWeight: 600,
+        }}>
+          {feedback.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
   const allClients = window.__HELPAI_CLIENTS_ROWS || [];
   const allInvoices = window.__HELPAI_INV_ROWS || [];
@@ -3720,6 +3778,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                            placeholder="cus_XXXXXXXXXXXXXX"
                            value={draft.stripe_customer_id} onChange={e => setDraft({ ...draft, stripe_customer_id: e.target.value })}/>
                   </_AdminField>
+                  <StripeBackfillButton client={selected}/>
                 </_AdminSection>
 
                 <_AdminSection title="Documents">
