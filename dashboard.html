@@ -5585,32 +5585,94 @@ function LeadDetailModal({ lead, clientName, onClose, onSaved }) {
             <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</button>
           </div>
 
-          {/* Conversation history */}
+          {/* Conversation history — bubbles groupées par jour, badges type_msg */}
           <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid var(--border-soft)" }}>
-            <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: 10 }}>
-              Historique SMS / WhatsApp · {conv.length}
+            <div className="row between" style={{ marginBottom: 12 }}>
+              <div className="small muted" style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
+                💬 Conversation · {conv.length} message{conv.length > 1 ? "s" : ""}
+              </div>
+              {conv.length > 0 && <span className="small muted">Du {fmtMs(conv[0].created_at).split(" ")[0]} au {fmtMs(conv[conv.length-1].created_at).split(" ")[0]}</span>}
             </div>
             {convLoading && <div className="muted small" style={{ textAlign: "center", padding: 12 }}>Chargement…</div>}
-            {!convLoading && conv.length === 0 && <div className="muted small" style={{ textAlign: "center", padding: 12 }}>Aucun message échangé pour ce lead.</div>}
+            {!convLoading && conv.length === 0 && (
+              <div className="card" style={{ padding: 16, textAlign: "center", background: "var(--bg-2)" }}>
+                <div className="small muted">Aucun message échangé pour ce lead.</div>
+                <div className="small muted" style={{ marginTop: 4, fontSize: 10.5 }}>Les SMS, WhatsApp et Telegram apparaîtront ici dès le premier échange.</div>
+              </div>
+            )}
+
             <div className="stack-sm">
-              {conv.map(c => {
-                const inbound = c.direction === "inbound" || c.direction === "in";
-                return (
-                  <div key={c.id} style={{ display: "flex", flexDirection: inbound ? "row" : "row-reverse" }}>
-                    <div style={{ maxWidth: "78%", padding: "10px 12px", borderRadius: 10,
-                                  background: inbound ? "var(--surface-2)" : "var(--accent-soft)",
-                                  border: "1px solid " + (inbound ? "var(--border-soft)" : "var(--accent-border)") }}>
-                      <div className="row between" style={{ marginBottom: 4, gap: 12 }}>
-                        <span className="small muted" style={{ fontSize: 10.5, fontWeight: 600 }}>
-                          {inbound ? "▼" : "▲"} {c.de || (inbound ? "Prospect" : "Système")}
-                        </span>
-                        <span className="mono small muted" style={{ fontSize: 10 }}>{fmtMs(c.created_at)}</span>
+              {(() => {
+                const TYPE_BADGES = {
+                  qualification: { label: "Qualif.",       color: "var(--accent)" },
+                  rdv:           { label: "RDV",           color: "var(--info)" },
+                  devis:         { label: "Devis",         color: "var(--accent-2)" },
+                  satisfaction:  { label: "Satisfaction",  color: "var(--success)" },
+                  relance:       { label: "Relance",       color: "var(--accent)" },
+                  appel_manque:  { label: "Appel manqué",  color: "var(--danger)" },
+                };
+                const dateLabel = (iso) => {
+                  if (!iso) return "—";
+                  const d = new Date(iso);
+                  const now = new Date();
+                  const today = now.toDateString() === d.toDateString();
+                  const yest = new Date(now); yest.setDate(yest.getDate() - 1);
+                  const isYest = yest.toDateString() === d.toDateString();
+                  if (today) return "Aujourd'hui";
+                  if (isYest) return "Hier";
+                  return d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" });
+                };
+
+                let lastDay = "";
+                return conv.map((c, idx) => {
+                  const inbound = c.direction === "inbound" || c.direction === "in";
+                  const day = c.created_at ? new Date(c.created_at).toDateString() : "";
+                  const showDayHeader = day !== lastDay;
+                  if (showDayHeader) lastDay = day;
+                  const senderLabel = c.de === "system"
+                    ? "🤖 Système"
+                    : c.de === "prospect"
+                    ? "👤 Prospect"
+                    : c.de === "artisan"
+                    ? "🔧 Artisan"
+                    : (c.de || (inbound ? "Prospect" : "Système"));
+                  const badge = TYPE_BADGES[c.type_msg];
+                  const time = c.created_at ? new Date(c.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—";
+                  return (
+                    <React.Fragment key={c.id || idx}>
+                      {showDayHeader && (
+                        <div style={{ textAlign: "center", margin: "10px 0 4px" }}>
+                          <span className="tag" style={{ fontSize: 10.5, padding: "3px 10px", letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 600 }}>
+                            {dateLabel(c.created_at)}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", flexDirection: inbound ? "row" : "row-reverse" }}>
+                        <div style={{ maxWidth: "78%", padding: "9px 12px", borderRadius: 12,
+                                      background: inbound ? "var(--surface-2)" : "var(--accent-soft)",
+                                      border: "1px solid " + (inbound ? "var(--border-soft)" : "var(--accent-border)"),
+                                      borderTopLeftRadius:  inbound ? 4 : 12,
+                                      borderTopRightRadius: inbound ? 12 : 4 }}>
+                          <div className="row between" style={{ marginBottom: 5, gap: 10, alignItems: "center" }}>
+                            <span className="small" style={{ fontSize: 10.5, fontWeight: 600, color: inbound ? "var(--text-2)" : "var(--accent)" }}>
+                              {senderLabel}
+                            </span>
+                            {badge && (
+                              <span className="tag" style={{ fontSize: 9.5, padding: "1px 6px", color: badge.color, borderColor: badge.color, background: "transparent" }}>
+                                {badge.label}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{c.contenu || "—"}</div>
+                          <div className="mono" style={{ fontSize: 9.5, color: "var(--text-3)", marginTop: 4, textAlign: inbound ? "left" : "right" }}>
+                            {time}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{c.contenu || "—"}</div>
-                    </div>
-                  </div>
-                );
-              })}
+                    </React.Fragment>
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>
