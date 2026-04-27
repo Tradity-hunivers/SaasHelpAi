@@ -168,14 +168,26 @@ if (!await isWorkflowEnabled(clientId, 'sms_qualification_prospect')) continue;
 - **Vue lecture seule** des workflows activés sur son compte
 - Pas de toggle, pas de config
 
-### E. Triggers DB + cron (à valider/créer)
+### E. Triggers DB + cron — État réel des `pg_cron` jobs
 
-À vérifier (peut-être déjà en place) :
-- `pg_cron` job toutes les 5 min → POST `agency-automation-engine`
-- Trigger PostgreSQL sur `INSERT/UPDATE agency_leads` → POST engine immédiat (pour réactivité)
+Audit fait le 2026-04-27, tous les jobs ci-dessous sont actifs en prod :
 
-À créer :
-- Trigger sur `INSERT agency_appels WHERE traite=false AND duree_sec=0` → POST engine (missed call)
+| Job | Schedule | Fréquence | Statut |
+|---|---|---|---|
+| `agency-automation-15min` | `*/5 * * * *` | toutes les 5 min | ✅ (passé de 15→5 min pour bien capter la fenêtre rappel RDV 30 min) |
+| `agency-bilan-mensuel` | `0 8 1 * *` | 1er du mois 8h | ✅ |
+| `agency-wa-relances` | `0 * * * *` | toutes les heures | ✅ legacy (l'engine v2 fait double emploi — à dégager après tests) |
+| `agency-blog-weekly` | `0 7 * * 1` | lundi 7h | ✅ |
+| `agency-ga4-daily` | `0 3 * * *` | tous les jours 3h | ✅ |
+| `lsa-poll-leads` | `* * * * *` | chaque minute | ✅ |
+| + 7 jobs GMB | … | … | ✅ |
+
+À voir plus tard (non bloquant) :
+- Trigger PostgreSQL sur `INSERT/UPDATE agency_leads` → POST engine immédiat
+  pour réactivité < 5 min (sinon délai max = 5 min avant action). Pas critique
+  car les fenêtres temporelles de l'engine sont conçues pour tolérer 5 min.
+- Trigger sur `INSERT agency_appels WHERE type='manque' AND traite=false`
+  → POST engine pour SMS d'excuse instantané (sinon délai max = 5 min).
 
 ---
 
