@@ -25,24 +25,39 @@ const TG_BOT_TOKEN  = Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Cache des workflow_settings par client (rechargé à chaque tick)
+// Contient pour chaque clientId :
+//   - enabled : Set des slugs activés
+//   - messages : map { slug → { [idx]: customText } } des templates custom
 // ─────────────────────────────────────────────────────────────────────────────
-const workflowEnabledCache = new Map<string, Set<string>>(); // clientId -> Set<slug>
+type ClientSettings = { enabled: Set<string>; messages: Record<string, Record<number, string>> };
+const settingsCache = new Map<string, ClientSettings>();
+
 async function loadWorkflowSettings() {
-  workflowEnabledCache.clear();
-  const { data } = await sb.from('agency_workflow_settings').select('client_id, workflow_slug, enabled');
+  settingsCache.clear();
+  const { data } = await sb.from('agency_workflow_settings').select('client_id, workflow_slug, enabled, config');
   for (const row of (data || [])) {
-    if (!row.enabled) continue;
-    if (!workflowEnabledCache.has(row.client_id)) workflowEnabledCache.set(row.client_id, new Set());
-    workflowEnabledCache.get(row.client_id)!.add(row.workflow_slug);
+    if (!settingsCache.has(row.client_id)) {
+      settingsCache.set(row.client_id, { enabled: new Set(), messages: {} });
+    }
+    const s = settingsCache.get(row.client_id)!;
+    if (row.enabled) s.enabled.add(row.workflow_slug);
+    const msgs = row.config?.messages;
+    if (msgs && typeof msgs === 'object') s.messages[row.workflow_slug] = msgs;
   }
 }
+
 function isWorkflowEnabled(clientId: string, slug: string): boolean {
-  // Défaut : activé si pas de ligne en base (le seed crée toutes les lignes
-  // pour les clients existants → en pratique ce fallback ne sert que pour
-  // les clients récemment créés avant l'exécution du trigger)
-  const set = workflowEnabledCache.get(clientId);
-  if (!set) return true;
-  return set.has(slug);
+  const s = settingsCache.get(clientId);
+  if (!s) return true; // défaut = activé pour les clients sans settings
+  return s.enabled.has(slug);
+}
+
+// Template renderer : renvoie soit le custom (si défini par le client) soit le fallback,
+// avec interpolation des {{variables}}.
+function tpl(clientId: string, slug: string, idx: number, fallback: string, vars: Record<string, string> = {}): string {
+  const custom = settingsCache.get(clientId)?.messages[slug]?.[idx];
+  const text   = custom || fallback;
+  return text.replace(/\{\{(\w+)\}\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : ''));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -210,8 +225,22 @@ Deno.serve(async (req: Request) => {
       const cId      = lead.client_id;
       const leadId   = lead.id;
       const nom      = lead.nom || 'votre prospect';
+      const nomPref  = lead.nom ? ' ' + lead.nom.split(' ')[0] : '';
       const srcLbl   = ({ site:'Site web', google_ads:'Google Ads', meta:'Meta Ads', appel:'Appel', lsa:'LSA', gmb:'GMB', autre:'Autre' } as any)[lead.source] || lead.source || '?';
       const avisUrl  = c?.avis_google_url || c?.agency_sites?.[0]?.avis_google_url || '';
+
+      // Variables de template (utilisées par tpl() pour rendre les messages custom)
+      const v = {
+        nom,
+        nom_prefix:  nomPref,
+        telephone:   lead.telephone || '',
+        prestation:  lead.prestation || '',
+        urgence:     lead.urgence || '',
+        source:      srcLbl,
+        ville:       (lead.metadata && (lead.metadata as any).ville) || '',
+        avis_url:    avisUrl,
+        artisan_nom: c?.nom || '',
+      };
 
       // ──────────────────────────────────────────────────────────────────────
       // AUTO 1 — sms_qualification_prospect : SMS qualif étape 1 (proprio?)
@@ -221,7 +250,8 @@ Deno.serve(async (req: Request) => {
           && !lead.sms_qualification_sent
           && lead.telephone) {
         if (await logAuto(leadId, cId, 'sms_qual_1', 'prospect')) {
-          const msg = `Bonjour${lead.nom ? ' ' + lead.nom.split(' ')[0] : ''}, merci pour votre demande !\n\nPour mieux comprendre votre besoin :\nÊtes-vous propriétaire ou locataire ?\n\nRépondez : PROPRIO ou LOCATAIRE`;
+          const msg = tpl(cId, 'sms_qualification_prospect', 0,
+            "Bonjour{{nom_prefix}}, merci pour votre demande !\n\nPour mieux comprendre votre besoin :\nÊtes-vous propriétaire ou locataire ?\n\nRépondez : PROPRIO ou LOCATAIRE", v);
           await sendToProspect(lead, msg, 'qualification');
           await sb.from('agency_leads').update({
             sms_qualification_sent: true, sms_etape: 1, statut: 'qualification_en_cours',
@@ -240,7 +270,8 @@ Deno.serve(async (req: Request) => {
         const cutoff30m = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
         if (lead.created_at < cutoff30m) {
           if (await logAuto(leadId, cId, 'appel_manque_sms', 'prospect')) {
-            await sendToProspect(lead, "Bonjour, je suis actuellement indisponible. Pouvez-vous me préciser votre besoin ? Je vous rappelle rapidement.", 'appel_manque');
+            await sendToProspect(lead, tpl(cId, 'appel_manque_relance', 0,
+              "Bonjour, je suis actuellement indisponible. Pouvez-vous me préciser votre besoin ? Je vous rappelle rapidement.", v), 'appel_manque');
             await sendToArtisan(c, `📞 Appel manqué de ${nom}${lead.telephone ? ` (${lead.telephone})` : ''}\nSource : ${srcLbl}\n\nÀ rappeler rapidement.`);
             results.push({ type: 'appel_manque', lead: nom });
           }
@@ -281,7 +312,9 @@ Deno.serve(async (req: Request) => {
           if (diffH > 20 && diffH < 28 && !lead.rdv_rappel_j1_sent) {
             if (await logAuto(leadId, cId, 'rdv_rappel_j1', 'prospect')) {
               const heure = rdvTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-              await sendToProspect(lead, `RDV confirmé demain à ${heure}.\nSi besoin de modifier, dites-le moi ici.`, 'rdv');
+              await sendToProspect(lead, tpl(cId, 'rdv_rappels_prospect', 0,
+                "RDV confirmé demain à {{rdv_heure}}.\nSi besoin de modifier, dites-le moi ici.",
+                { ...v, rdv_heure: heure }), 'rdv');
               await sb.from('agency_leads').update({ rdv_rappel_j1_sent: true }).eq('id', leadId);
               results.push({ type: 'rdv_j1', lead: nom });
             }
@@ -289,14 +322,17 @@ Deno.serve(async (req: Request) => {
           if (diffH > 1.5 && diffH < 2.5 && !lead.rdv_rappel_2h_sent) {
             if (await logAuto(leadId, cId, 'rdv_rappel_2h', 'prospect')) {
               const heure = rdvTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-              await sendToProspect(lead, `C'est toujours OK pour le RDV à ${heure} ?\nRépondez OUI pour confirmer.`, 'rdv');
+              await sendToProspect(lead, tpl(cId, 'rdv_rappels_prospect', 1,
+                "C'est toujours OK pour le RDV à {{rdv_heure}} ?\nRépondez OUI pour confirmer.",
+                { ...v, rdv_heure: heure }), 'rdv');
               await sb.from('agency_leads').update({ rdv_rappel_2h_sent: true }).eq('id', leadId);
               results.push({ type: 'rdv_2h', lead: nom });
             }
           }
           if (diffH > 0.3 && diffH < 0.6 && !lead.rdv_rappel_30m_sent) {
             if (await logAuto(leadId, cId, 'rdv_rappel_30m', 'prospect')) {
-              await sendToProspect(lead, `Je suis disponible dans 30 minutes.`, 'rdv');
+              await sendToProspect(lead, tpl(cId, 'rdv_rappels_prospect', 2,
+                "Je suis disponible dans 30 minutes.", v), 'rdv');
               await sb.from('agency_leads').update({ rdv_rappel_30m_sent: true }).eq('id', leadId);
               results.push({ type: 'rdv_30m', lead: nom });
             }
@@ -335,19 +371,22 @@ Deno.serve(async (req: Request) => {
         const sinceH = (now.getTime() - ref.getTime()) / 36e5;
         if (sinceH < 0.5) {
           if (await logAuto(leadId, cId, 'noshow_immediat', 'prospect')) {
-            await sendToProspect(lead, "Je vous attendais pour notre RDV, tout va bien ?\nOn peut reprogrammer rapidement si besoin.", 'relance');
+            await sendToProspect(lead, tpl(cId, 'no_show_relances', 0,
+              "Je vous attendais pour notre RDV, tout va bien ?\nOn peut reprogrammer rapidement si besoin.", v), 'relance');
             results.push({ type: 'noshow_0', lead: nom });
           }
         }
         if (sinceH > 2 && sinceH < 3) {
           if (await logAuto(leadId, cId, 'noshow_2h', 'prospect')) {
-            await sendToProspect(lead, "Je reste disponible pour votre projet.\nDites-moi quand vous êtes disponible pour reprogrammer.", 'relance');
+            await sendToProspect(lead, tpl(cId, 'no_show_relances', 1,
+              "Je reste disponible pour votre projet.\nDites-moi quand vous êtes disponible pour reprogrammer.", v), 'relance');
             results.push({ type: 'noshow_2h', lead: nom });
           }
         }
         if (sinceH > 22 && sinceH < 27) {
           if (await logAuto(leadId, cId, 'noshow_j1', 'prospect')) {
-            await sendToProspect(lead, "Je me permets de revenir vers vous. Votre projet est-il toujours d'actualité ?", 'relance');
+            await sendToProspect(lead, tpl(cId, 'no_show_relances', 2,
+              "Je me permets de revenir vers vous. Votre projet est-il toujours d'actualité ?", v), 'relance');
             results.push({ type: 'noshow_j1', lead: nom });
           }
         }
@@ -363,21 +402,24 @@ Deno.serve(async (req: Request) => {
         const sinceD = (now.getTime() - new Date(lead.devis_envoye_le).getTime()) / 86400e3;
         if (sinceD > 2 && sinceD < 3 && !lead.devis_relance_j2) {
           if (await logAuto(leadId, cId, 'devis_relance_j2', 'prospect')) {
-            await sendToProspect(lead, `Bonjour${lead.nom ? ' ' + lead.nom.split(' ')[0] : ''}, avez-vous pu consulter le devis ?`, 'devis');
+            await sendToProspect(lead, tpl(cId, 'devis_relances_prospect', 0,
+              "Bonjour{{nom_prefix}}, avez-vous pu consulter le devis ?", v), 'devis');
             await sb.from('agency_leads').update({ devis_relance_j2: true }).eq('id', leadId);
             results.push({ type: 'devis_j2', lead: nom });
           }
         }
         if (sinceD > 5 && sinceD < 6 && !lead.devis_relance_j5) {
           if (await logAuto(leadId, cId, 'devis_relance_j5', 'prospect')) {
-            await sendToProspect(lead, "Bonjour, je me permets de revenir vers vous concernant votre projet. Avez-vous des questions sur le devis ?", 'devis');
+            await sendToProspect(lead, tpl(cId, 'devis_relances_prospect', 1,
+              "Bonjour, je me permets de revenir vers vous concernant votre projet. Avez-vous des questions sur le devis ?", v), 'devis');
             await sb.from('agency_leads').update({ devis_relance_j5: true }).eq('id', leadId);
             results.push({ type: 'devis_j5', lead: nom });
           }
         }
         if (sinceD > 15 && sinceD < 16 && !lead.devis_relance_j15) {
           if (await logAuto(leadId, cId, 'devis_relance_j15', 'prospect')) {
-            await sendToProspect(lead, "Bonjour, je me permets de faire une dernière relance concernant votre devis. Votre projet est-il toujours d'actualité ?", 'devis');
+            await sendToProspect(lead, tpl(cId, 'devis_relances_prospect', 2,
+              "Bonjour, je me permets de faire une dernière relance concernant votre devis. Votre projet est-il toujours d'actualité ?", v), 'devis');
             await sb.from('agency_leads').update({ devis_relance_j15: true }).eq('id', leadId);
             results.push({ type: 'devis_j15', lead: nom });
           }
@@ -412,7 +454,8 @@ Deno.serve(async (req: Request) => {
           && !lead.avis_demande
           && lead.telephone) {
         if (await logAuto(leadId, cId, 'satisfaction', 'prospect')) {
-          await sendToProspect(lead, "Merci pour votre confiance.\n\nSur une échelle de 1 à 5, êtes-vous satisfait du travail réalisé ?\n\nRépondez avec le chiffre : 1, 2, 3, 4 ou 5", 'satisfaction');
+          await sendToProspect(lead, tpl(cId, 'satisfaction_post_chantier', 0,
+            "Merci pour votre confiance.\n\nSur une échelle de 1 à 5, êtes-vous satisfait du travail réalisé ?\n\nRépondez avec le chiffre : 1, 2, 3, 4 ou 5", v), 'satisfaction');
           await sb.from('agency_leads').update({ avis_demande: true }).eq('id', leadId);
           results.push({ type: 'satisfaction', lead: nom });
         }

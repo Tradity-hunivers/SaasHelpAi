@@ -7160,9 +7160,78 @@ function renderTemplate(text, vars) {
   return (text || "").replace(/\{\{(\w+)\}\}/g, (_, key) => (vars && vars[key] != null ? vars[key] : ""));
 }
 
-function WorkflowPreviewModal({ workflow, onClose }) {
-  const messages = WORKFLOW_MESSAGES_DEFAULTS[workflow.slug] || [];
+function WorkflowPreviewModal({ workflow, clientId, clientName, onClose }) {
+  const defaults = WORKFLOW_MESSAGES_DEFAULTS[workflow.slug] || [];
   const [vars, setVars] = React.useState(PREVIEW_SAMPLE_VARS);
+  const [customMsgs, setCustomMsgs] = React.useState({});  // { idx → custom text }
+  const [editIdx, setEditIdx]       = React.useState(-1); // -1 = aucun en édition
+  const [editText, setEditText]     = React.useState("");
+  const [saving, setSaving]         = React.useState(false);
+  const [feedback, setFeedback]     = React.useState(null);
+
+  // Charger les messages custom existants pour ce (client, workflow)
+  React.useEffect(() => {
+    if (!clientId) return;
+    sb.from("agency_workflow_settings")
+      .select("config")
+      .eq("client_id", clientId)
+      .eq("workflow_slug", workflow.slug)
+      .maybeSingle()
+      .then(({ data }) => {
+        const msgs = data?.config?.messages;
+        if (msgs && typeof msgs === "object") setCustomMsgs(msgs);
+      });
+  }, [clientId, workflow.slug]);
+
+  async function saveCustomMessage(idx, text) {
+    if (!clientId) return;
+    setSaving(true);
+    setFeedback(null);
+    // Lire la config actuelle, fusionner, upsert
+    const { data: row } = await sb.from("agency_workflow_settings")
+      .select("id, config")
+      .eq("client_id", clientId)
+      .eq("workflow_slug", workflow.slug)
+      .maybeSingle();
+    const newConfig = { ...(row?.config || {}), messages: { ...(row?.config?.messages || {}), [idx]: text } };
+    let err;
+    if (row?.id) {
+      ({ error: err } = await sb.from("agency_workflow_settings")
+        .update({ config: newConfig, updated_at: new Date().toISOString() })
+        .eq("id", row.id));
+    } else {
+      ({ error: err } = await sb.from("agency_workflow_settings")
+        .insert({ client_id: clientId, workflow_slug: workflow.slug, enabled: true, config: newConfig }));
+    }
+    setSaving(false);
+    if (err) { setFeedback({ type: "error", text: err.message }); return; }
+    setCustomMsgs(newConfig.messages);
+    setEditIdx(-1);
+    setFeedback({ type: "success", text: "Message sauvegardé." });
+    setTimeout(() => setFeedback(null), 2500);
+  }
+
+  async function resetCustomMessage(idx) {
+    if (!clientId) return;
+    if (!window.confirm("Restaurer le message par défaut ?")) return;
+    setSaving(true);
+    const { data: row } = await sb.from("agency_workflow_settings")
+      .select("id, config")
+      .eq("client_id", clientId)
+      .eq("workflow_slug", workflow.slug)
+      .maybeSingle();
+    if (row?.id) {
+      const msgs = { ...(row.config?.messages || {}) };
+      delete msgs[idx];
+      const newConfig = { ...(row.config || {}), messages: msgs };
+      await sb.from("agency_workflow_settings")
+        .update({ config: newConfig, updated_at: new Date().toISOString() })
+        .eq("id", row.id);
+      setCustomMsgs(msgs);
+    }
+    setSaving(false);
+    setEditIdx(-1);
+  }
 
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:200, display:"grid", placeItems:"center", padding:24 }}>
@@ -7178,7 +7247,10 @@ function WorkflowPreviewModal({ workflow, onClose }) {
               </div>
               <strong style={{ fontSize:14 }}>Aperçu — {workflow.name}</strong>
             </div>
-            <div className="small muted">Tous les messages que ce workflow enverrait, rendus avec un faux lead.</div>
+            <div className="small muted">
+              {clientName ? <>Client : <strong>{clientName}</strong> · </> : null}
+              Cliquez sur un message pour le personnaliser.
+            </div>
           </div>
           <button className="btn icon ghost" onClick={onClose} title="Fermer">×</button>
         </div>
@@ -7198,28 +7270,86 @@ function WorkflowPreviewModal({ workflow, onClose }) {
         </div>
 
         <div style={{ flex:1, overflow:"auto", padding:"14px 20px" }}>
-          {messages.length === 0 && (
+          {feedback && (
+            <div className="card" style={{ marginBottom:10, padding:"8px 12px",
+                 background: feedback.type === "error" ? "oklch(0.68 0.17 25 / 0.12)" : "oklch(0.78 0.13 155 / 0.12)",
+                 borderColor: feedback.type === "error" ? "var(--danger)" : "var(--success)" }}>
+              <div className="small" style={{ color: feedback.type === "error" ? "var(--danger)" : "var(--success)" }}>{feedback.text}</div>
+            </div>
+          )}
+          {defaults.length === 0 && (
             <div className="muted small" style={{ textAlign:"center", padding:24 }}>
               Aucun message défini pour ce workflow (logique gérée côté webhook conversationnel).
             </div>
           )}
-          {messages.map((m, i) => {
-            const rendered = renderTemplate(m.text, vars);
+          {defaults.map((m, i) => {
             const isProspect = m.canal.toLowerCase().includes("prospect");
+            const isCustom   = customMsgs[i] !== undefined;
+            const isEditable = isProspect && !!clientId;
+            const baseText   = isCustom ? customMsgs[i] : m.text;
+            const rendered   = renderTemplate(baseText, vars);
+            const inEdit     = editIdx === i;
+
             return (
-              <div key={i} className="card" style={{ marginBottom:10, padding:"10px 12px", background: isProspect ? "var(--accent-soft)" : "var(--surface-2)" }}>
+              <div key={i} className="card" style={{ marginBottom:10, padding:"10px 12px",
+                   background: isProspect ? "var(--accent-soft)" : "var(--surface-2)",
+                   borderColor: isCustom ? "var(--accent)" : "var(--border-soft)" }}>
                 <div className="row between" style={{ marginBottom:6 }}>
-                  <div className="small" style={{ fontWeight:600 }}>{m.label}</div>
+                  <div className="row" style={{ gap:8, alignItems:"center" }}>
+                    <div className="small" style={{ fontWeight:600 }}>{m.label}</div>
+                    {isCustom && <span className="tag accent" style={{ fontSize:9.5 }}>✏ Custom</span>}
+                  </div>
                   <span className={"tag " + (isProspect ? "accent" : "success")} style={{ fontSize:10 }}>{m.canal}</span>
                 </div>
-                <div style={{ fontSize:12.5, lineHeight:1.55, whiteSpace:"pre-wrap", color:"var(--text-1)" }}>
-                  {rendered}
-                </div>
-                {m.buttons && (
-                  <div className="row" style={{ gap:6, marginTop:8, flexWrap:"wrap" }}>
-                    {m.buttons.map((b, j) => (
-                      <span key={j} className="tag" style={{ fontSize:10, padding:"2px 8px", borderColor:"var(--accent-border)", color:"var(--accent)" }}>{b}</span>
-                    ))}
+
+                {!inEdit && (
+                  <>
+                    <div style={{ fontSize:12.5, lineHeight:1.55, whiteSpace:"pre-wrap", color:"var(--text-1)" }}>
+                      {rendered}
+                    </div>
+                    {m.buttons && (
+                      <div className="row" style={{ gap:6, marginTop:8, flexWrap:"wrap" }}>
+                        {m.buttons.map((b, j) => (
+                          <span key={j} className="tag" style={{ fontSize:10, padding:"2px 8px", borderColor:"var(--accent-border)", color:"var(--accent)" }}>{b}</span>
+                        ))}
+                      </div>
+                    )}
+                    {isEditable && (
+                      <div className="row" style={{ gap:6, marginTop:8 }}>
+                        <button className="btn" style={{ height:24, fontSize:10.5 }}
+                                onClick={() => { setEditIdx(i); setEditText(baseText); }}>
+                          ✏ Personnaliser
+                        </button>
+                        {isCustom && (
+                          <button className="btn ghost" style={{ height:24, fontSize:10.5, color:"var(--text-3)" }}
+                                  onClick={() => resetCustomMessage(i)}>
+                            ↺ Réinitialiser
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {inEdit && (
+                  <div className="stack-sm">
+                    <textarea className="search" rows={5}
+                              style={{ width:"100%", minWidth:0, padding:"8px 10px", lineHeight:1.5, fontSize:12.5, color:"var(--text-1)", whiteSpace:"pre-wrap", fontFamily:"inherit" }}
+                              value={editText}
+                              onChange={e => setEditText(e.target.value)}/>
+                    <div className="small muted" style={{ fontSize:10.5 }}>
+                      Variables : <code className="code" style={{ fontSize:10 }}>{`{{nom}}`}</code> <code className="code" style={{ fontSize:10 }}>{`{{nom_prefix}}`}</code> <code className="code" style={{ fontSize:10 }}>{`{{prestation}}`}</code> <code className="code" style={{ fontSize:10 }}>{`{{source}}`}</code> <code className="code" style={{ fontSize:10 }}>{`{{rdv_heure}}`}</code> <code className="code" style={{ fontSize:10 }}>{`{{avis_url}}`}</code>
+                    </div>
+                    <div className="small" style={{ padding:"6px 8px", background:"var(--bg-2)", borderRadius:6, lineHeight:1.4, whiteSpace:"pre-wrap" }}>
+                      <span className="muted" style={{ fontSize:10, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.04em" }}>Aperçu :</span><br/>
+                      {renderTemplate(editText, vars)}
+                    </div>
+                    <div className="row" style={{ gap:6, justifyContent:"flex-end" }}>
+                      <button className="btn ghost" style={{ height:26, fontSize:11 }} onClick={() => setEditIdx(-1)} disabled={saving}>Annuler</button>
+                      <button className="btn primary" style={{ height:26, fontSize:11 }} onClick={() => saveCustomMessage(i, editText)} disabled={saving}>
+                        {saving ? "Sauvegarde…" : "Sauvegarder"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -7600,6 +7730,8 @@ function ScreenAutomations() {
       {previewWorkflow && (
         <WorkflowPreviewModal
           workflow={previewWorkflow}
+          clientId={selClient}
+          clientName={selectedClient ? selectedClient.nom : ""}
           onClose={() => setPreviewWorkflow(null)}
         />
       )}
