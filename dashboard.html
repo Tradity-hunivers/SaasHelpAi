@@ -3339,6 +3339,7 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
   const [previewBlog, setPreviewBlog] = React.useState(null); // { post } | null
   const [caRows, setCaRows] = React.useState([]);
   const [autoLog, setAutoLog] = React.useState([]);
+  const [deleteConfirm, setDeleteConfirm] = React.useState(null); // { client, deleting } pour la modal de suppression
 
   const selected = allClients.find(c => c.id === selectedId) || null;
   const [inviteOpen, setInviteOpen] = React.useState(false);
@@ -3986,11 +3987,19 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                   </div>
                 )}
 
-                <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-                  <button className="btn" disabled={saving} onClick={() => setDraft(buildDraft(selected))}>Annuler</button>
-                  <button className="btn primary" disabled={saving} onClick={save}>
-                    {saving ? "Enregistrement…" : "Enregistrer"}
+                <div className="row between" style={{ gap: 8 }}>
+                  <button className="btn" disabled={saving}
+                          onClick={() => setDeleteConfirm({ client: selected, deleting: false, error: null })}
+                          style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                          title="Supprimer ce client (et toutes ses données associées)">
+                    🗑️ Supprimer ce client
                   </button>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button className="btn" disabled={saving} onClick={() => setDraft(buildDraft(selected))}>Annuler</button>
+                    <button className="btn primary" disabled={saving} onClick={save}>
+                      {saving ? "Enregistrement…" : "Enregistrer"}
+                    </button>
+                  </div>
                 </div>
 
                 {/* === CA Mensuel === */}
@@ -4278,6 +4287,20 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
             if (onRefresh) onRefresh();
             else window.location.reload();
           }}
+        />
+      )}
+
+      {deleteConfirm && (
+        <DeleteClientModal
+          state={deleteConfirm}
+          onClose={() => setDeleteConfirm(null)}
+          onDeleted={() => {
+            setDeleteConfirm(null);
+            setSelectedId(null);
+            if (onRefresh) onRefresh();
+            else window.location.reload();
+          }}
+          setState={setDeleteConfirm}
         />
       )}
     </div>
@@ -4627,6 +4650,120 @@ function InviteArtisanModal({ onClose, onCreated }) {
 
 window.ScreenClientsAdmin = ScreenClientsAdmin;
 window.InviteArtisanModal = InviteArtisanModal;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modal de confirmation pour supprimer un client.
+// Pré-supprime les enfants (RLS / FK sans CASCADE) avant DELETE sur agency_clients.
+// Tables enfants à nettoyer dans l'ordre (avant le client lui-même) :
+//   agency_workflow_settings, agency_lead_conversations, agency_wa_messages,
+//   agency_automation_log, agency_appels, agency_relances, agency_kpis,
+//   agency_invoices, agency_documents, agency_blog_posts, agency_ga_stats,
+//   agency_ca_mensuel, agency_sites, agency_leads.
+// (CASCADE existe sur certaines mais on est paranoïde — better safe than sorry)
+// ─────────────────────────────────────────────────────────────────────────────
+function DeleteClientModal({ state, setState, onClose, onDeleted }) {
+  const { client } = state;
+  const [confirmText, setConfirmText] = React.useState("");
+  const expectedText = client.nom || "";
+  const canDelete = confirmText.trim() === expectedText.trim() && !state.deleting;
+
+  async function doDelete() {
+    setState(s => ({ ...s, deleting: true, error: null }));
+    const childTables = [
+      "agency_workflow_settings",
+      "agency_lead_conversations",
+      "agency_wa_messages",
+      "agency_automation_log",
+      "agency_appels",
+      "agency_relances",
+      "agency_kpis",
+      "agency_invoices",
+      "agency_documents",
+      "agency_blog_posts",
+      "agency_ga_stats",
+      "agency_ca_mensuel",
+      "agency_sites",
+      "agency_leads",
+    ];
+    try {
+      for (const t of childTables) {
+        const { error } = await sb.from(t).delete().eq("client_id", client.id);
+        if (error && error.code !== "42P01" /* table inexistante, on ignore */) {
+          // On continue quand même — certaines tables peuvent ne pas avoir client_id
+          console.warn("Delete " + t + " warn:", error.message);
+        }
+      }
+      const { error } = await sb.from("agency_clients").delete().eq("id", client.id);
+      if (error) {
+        setState(s => ({ ...s, deleting: false, error: error.message }));
+        return;
+      }
+      onDeleted();
+    } catch (e) {
+      setState(s => ({ ...s, deleting: false, error: String(e) }));
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "grid", placeItems: "center", padding: 24 }}>
+      <div onClick={e => e.stopPropagation()}
+           style={{ width: "min(520px, 100%)", display: "flex", flexDirection: "column",
+                    background: "var(--bg)", border: "1px solid var(--danger)", borderRadius: 14,
+                    boxShadow: "0 24px 60px rgba(0,0,0,0.6)" }}>
+        <div className="row between" style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-soft)" }}>
+          <div>
+            <strong style={{ fontSize: 14, color: "var(--danger)" }}>⚠️ Supprimer définitivement</strong>
+            <div className="small muted" style={{ marginTop: 2 }}>Cette action est <strong>irréversible</strong>.</div>
+          </div>
+          <button className="btn icon ghost" onClick={onClose} disabled={state.deleting} title="Fermer">×</button>
+        </div>
+
+        <div style={{ padding: 20 }} className="stack-md">
+          <div className="card" style={{ padding: 12, background: "oklch(0.68 0.17 25 / 0.10)", borderColor: "var(--danger)" }}>
+            <div className="small" style={{ marginBottom: 8, lineHeight: 1.5 }}>
+              Tu vas supprimer <strong>{client.nom}</strong> et <strong>TOUTES</strong> ses données associées :
+            </div>
+            <ul className="small muted" style={{ paddingLeft: 18, lineHeight: 1.7, margin: 0 }}>
+              <li>Tous les leads + conversations SMS/WA</li>
+              <li>Tous les KPIs, factures, documents, articles de blog</li>
+              <li>Tous les workflows et logs d'automation</li>
+              <li>L'utilisateur Auth associé NE sera PAS supprimé (à faire manuellement si besoin)</li>
+            </ul>
+          </div>
+
+          <div className="stack-xs">
+            <label className="small muted">
+              Pour confirmer, tape exactement le nom du client : <strong style={{ color: "var(--danger)" }}>{expectedText}</strong>
+            </label>
+            <input className="search" type="text" autoFocus
+                   placeholder={expectedText}
+                   style={{ width: "100%", minWidth: 0, color: "var(--text-1)" }}
+                   value={confirmText}
+                   onChange={e => setConfirmText(e.target.value)}/>
+          </div>
+
+          {state.error && (
+            <div className="small" style={{ color: "var(--danger)", padding: 8, background: "oklch(0.68 0.17 25 / 0.10)", borderRadius: 6 }}>
+              ❌ {state.error}
+            </div>
+          )}
+        </div>
+
+        <div className="row" style={{ padding: "10px 20px", borderTop: "1px solid var(--border-soft)", gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn" onClick={onClose} disabled={state.deleting}>Annuler</button>
+          <button className="btn"
+                  onClick={doDelete}
+                  disabled={!canDelete}
+                  style={{ background: canDelete ? "var(--danger)" : "var(--surface-2)", color: canDelete ? "white" : "var(--text-3)", borderColor: "transparent" }}>
+            {state.deleting ? "Suppression…" : "🗑️ Supprimer définitivement"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.DeleteClientModal = DeleteClientModal;
 
 /* ============ Mon compte ============ */
 function ScreenAccount({ user, userClient, isAdmin, onRefresh }) {
