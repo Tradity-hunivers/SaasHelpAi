@@ -118,6 +118,24 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // 🔥 FIRE-AND-FORGET : déclencher l'engine IMMÉDIATEMENT pour ne pas
+    // attendre le prochain tick cron (5 min). Le prospect doit recevoir
+    // le SMS d'excuse en quelques secondes, pas en quelques minutes.
+    // EdgeRuntime.waitUntil garde le worker actif sans bloquer la réponse TwiML.
+    if (isMissed && leadId) {
+      const trigger = fetch(`${SUPABASE_URL}/functions/v1/agency-automation-engine`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: '{}',
+      }).catch(e => console.warn('Engine trigger failed:', e));
+      // @ts-ignore — EdgeRuntime existe en runtime Deno Deploy mais pas en types
+      if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(trigger);
+      else trigger; // fallback : laisse Deno terminer le fetch en background
+    }
+
     // Log dans agency_appels
     await sb.from('agency_appels').insert({
       client_id:      client?.id || null,
