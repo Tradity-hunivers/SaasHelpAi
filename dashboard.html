@@ -3398,6 +3398,8 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       telegram_chat_id: c.telegram_chat_id || "",
       telegram_actif: !!c.telegram_actif,
       avis_google_url: c.avis_google_url || "",
+      twilio_phone: c.twilio_phone || "",
+      twilio_phone_ads: c.twilio_phone_ads || "",
     };
   }
 
@@ -3449,6 +3451,8 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
       telegram_chat_id: (draft.telegram_chat_id || "").trim() || null,
       telegram_actif: !!draft.telegram_actif,
       avis_google_url: (draft.avis_google_url || "").trim() || null,
+      twilio_phone: (draft.twilio_phone || "").trim() || null,
+      twilio_phone_ads: (draft.twilio_phone_ads || "").trim() || null,
       drive_folder_id: draft.drive_folder_id.trim() || null,
       telegram_notify: !!draft.telegram_notify,
       notes_internes: draft.notes_internes.trim() || null,
@@ -3946,6 +3950,25 @@ function ScreenClientsAdmin({ onViewClient, onRefresh, tick }) {
                            onChange={e => setDraft({ ...draft, telegram_notify: e.target.checked })}/>
                     <span className="small muted">Notifications Telegram (legacy / agence)</span>
                   </label>
+                </_AdminSection>
+
+                <_AdminSection title="Téléphonie (Twilio)">
+                  <_AdminField label="Numéro Twilio principal"
+                               hint="Numéro Twilio dédié à cet artisan. Utilisé pour SMS prospects + voice forward + missed call detection. Format international (+33...).">
+                    <input className="search" type="tel"
+                           placeholder="+33939246314"
+                           style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+                           value={draft.twilio_phone || ""}
+                           onChange={e => setDraft({ ...draft, twilio_phone: e.target.value })}/>
+                  </_AdminField>
+                  <_AdminField label="Numéro Twilio Ads (optionnel)"
+                               hint="Numéro de tracking pour Meta Ads / Google Ads. Si renseigné, les appels reçus dessus sont taggés source='google_ads' automatiquement.">
+                    <input className="search" type="tel"
+                           placeholder="+33939246315"
+                           style={{ minWidth: 0, width: "100%", cursor: "text", color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+                           value={draft.twilio_phone_ads || ""}
+                           onChange={e => setDraft({ ...draft, twilio_phone_ads: e.target.value })}/>
+                  </_AdminField>
                 </_AdminSection>
 
                 <_AdminSection title="Notes internes">
