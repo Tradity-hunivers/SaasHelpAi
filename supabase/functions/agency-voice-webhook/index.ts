@@ -90,24 +90,28 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
       leadId = existing?.id || null;
 
-      if (!leadId && isMissed) {
-        // Créer un lead "appel manqué" : permet à l'engine de déclencher
-        // workflow #3 (SMS d'excuse + notif artisan).
-        // Source dérivée du numéro Twilio appelé : 'appel' pour le principal,
-        // 'ads' (rebadgé en google_ads par défaut, à raffiner par UTM ensuite)
-        // si l'appel est tombé sur le numéro de tracking ads.
-        const sourceFromMatch = (client as any)?._matched === 'ads' ? 'google_ads' : 'appel';
+      // Source dérivée du numéro Twilio appelé : 'appel' pour le principal,
+      // 'google_ads' si le numéro Ads a été composé (à raffiner par UTM ensuite).
+      const sourceFromMatch = (client as any)?._matched === 'ads' ? 'google_ads' : 'appel';
+
+      if (!leadId) {
+        // Pas de lead existant → on en crée un, qu'il y ait eu réponse ou non.
+        // Cas missed : appel_manque=true → l'engine déclenche workflow #3
+        //   (SMS d'excuse au prospect + notif artisan).
+        // Cas répondu : appel_repondu_le=now → l'engine déclenche workflow #4
+        //   (10 min après, demande à l'artisan : RDV pris / Devis / Perdu / À rappeler).
         const { data: newLead } = await sb.from('agency_leads').insert({
-          client_id:    client.id,
-          telephone:    fromPhone,
-          source:       sourceFromMatch,
-          statut:       'nouveau',
-          appel_manque: true,
+          client_id:        client.id,
+          telephone:        fromPhone,
+          source:           sourceFromMatch,
+          statut:           'nouveau',
+          appel_manque:     isMissed,
+          appel_repondu_le: traite ? new Date().toISOString() : null,
         }).select('id').single();
         leadId = newLead?.id || null;
-      } else if (leadId && isMissed) {
+      } else if (isMissed) {
         await sb.from('agency_leads').update({ appel_manque: true }).eq('id', leadId);
-      } else if (leadId && traite) {
+      } else if (traite) {
         await sb.from('agency_leads')
           .update({ appel_repondu_le: new Date().toISOString() })
           .eq('id', leadId);
