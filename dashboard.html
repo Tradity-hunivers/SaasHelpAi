@@ -6605,6 +6605,23 @@ function LeadDetailModal({ lead, clientName, onClose, onSaved }) {
   const [error, setError]   = React.useState(null);
   const [conv, setConv]     = React.useState([]);
   const [convLoading, setConvLoading] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
+  async function deleteLead() {
+    const name = lead.nom || "ce lead";
+    if (!window.confirm("Supprimer définitivement \"" + name + "\" ?\n\nCela effacera aussi toutes les conversations SMS/WhatsApp et les logs d'automation associés.")) return;
+    setError(null); setDeleting(true);
+    // Pré-supprimer les enfants par lead_id
+    for (const t of ["agency_lead_conversations", "agency_wa_messages", "agency_automation_log", "agency_appels", "agency_relances"]) {
+      const { error: e } = await sb.from(t).delete().eq("lead_id", lead.id);
+      if (e && e.code !== "42P01") console.warn("delete " + t + ":", e.message);
+    }
+    const { error: err } = await sb.from("agency_leads").delete().eq("id", lead.id);
+    setDeleting(false);
+    if (err) { setError(err.message); return; }
+    // Reload pour rafraîchir window.__HELPAI_LEADS_ROWS (sinon le lead supprimé reste affiché)
+    window.location.reload();
+  }
 
   const showRdv     = String(draft.statut).indexOf("rdv") >= 0 || String(draft.statut) === "qualifie" || String(draft.statut) === "qualification_en_cours";
   const showMontant = draft.statut === "devis_signe" || draft.statut === "chantier_termine" || draft.statut === "chantier_en_cours" || draft.statut === "gagne";
@@ -6754,9 +6771,16 @@ function LeadDetailModal({ lead, clientName, onClose, onSaved }) {
 
           {error && <div className="small" style={{ color: "var(--danger)", marginTop: 10 }}>{error}</div>}
 
-          <div className="row" style={{ gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
-            <button className="btn" onClick={onClose} disabled={saving}>Annuler</button>
-            <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</button>
+          <div className="row between" style={{ gap: 8, marginTop: 14 }}>
+            <button className="btn" onClick={deleteLead} disabled={saving || deleting}
+                    style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                    title="Supprimer définitivement ce lead + ses conversations">
+              {deleting ? "Suppression…" : "🗑️ Supprimer"}
+            </button>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn" onClick={onClose} disabled={saving || deleting}>Annuler</button>
+              <button className="btn primary" onClick={save} disabled={saving || deleting}>{saving ? "Enregistrement…" : "Enregistrer"}</button>
+            </div>
           </div>
 
           {/* Conversation history — bubbles groupées par jour, badges type_msg */}
