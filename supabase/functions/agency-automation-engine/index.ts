@@ -244,11 +244,18 @@ Deno.serve(async (req: Request) => {
 
       // ──────────────────────────────────────────────────────────────────────
       // AUTO 1 — sms_qualification_prospect : SMS qualif étape 1 (proprio?)
+      //   Déclenché uniquement pour les leads venant d'un FORMULAIRE
+      //   (site / meta / google_ads / gmb). Pas pour les appels — un prospect
+      //   qui appelle attend qu'on le rappelle, pas un quiz par SMS.
       // ──────────────────────────────────────────────────────────────────────
       if (isWorkflowEnabled(cId, 'sms_qualification_prospect')
           && lead.statut === 'nouveau'
           && !lead.sms_qualification_sent
-          && lead.telephone) {
+          && lead.telephone
+          && lead.source !== 'appel'
+          && lead.source !== 'lsa'
+          && !lead.appel_manque
+          && !lead.appel_repondu_le) {
         if (await logAuto(leadId, cId, 'sms_qual_1', 'prospect')) {
           const msg = tpl(cId, 'sms_qualification_prospect', 0,
             "Bonjour{{nom_prefix}}, merci pour votre demande !\n\nPour mieux comprendre votre besoin :\nÊtes-vous propriétaire ou locataire ?\n\nRépondez : PROPRIO ou LOCATAIRE", v);
@@ -261,14 +268,16 @@ Deno.serve(async (req: Request) => {
       }
 
       // ──────────────────────────────────────────────────────────────────────
-      // AUTO 2 — appel_manque_relance : SMS prospect 30 min après appel manqué
+      // AUTO 2 — appel_manque_relance : SMS d'excuse au prospect + notif artisan
+      //   Délai court de 2 min — le temps que l'artisan ait une chance de
+      //   rappeler manuellement avant que le système prenne le relais.
       // ──────────────────────────────────────────────────────────────────────
       if (isWorkflowEnabled(cId, 'appel_manque_relance')
           && lead.appel_manque
           && !lead.sms_qualification_sent
           && lead.telephone) {
-        const cutoff30m = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
-        if (lead.created_at < cutoff30m) {
+        const cutoff2m = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
+        if (lead.created_at < cutoff2m) {
           if (await logAuto(leadId, cId, 'appel_manque_sms', 'prospect')) {
             await sendToProspect(lead, tpl(cId, 'appel_manque_relance', 0,
               "Bonjour, je suis actuellement indisponible. Pouvez-vous me préciser votre besoin ? Je vous rappelle rapidement.", v), 'appel_manque');
