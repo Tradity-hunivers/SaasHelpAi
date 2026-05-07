@@ -96,18 +96,24 @@ Deno.serve(async (req: Request) => {
 
       if (!leadId) {
         // Pas de lead existant → on en crée un, qu'il y ait eu réponse ou non.
-        // Cas missed : appel_manque=true → l'engine déclenche workflow #3
-        //   (SMS d'excuse au prospect + notif artisan).
-        // Cas répondu : appel_repondu_le=now → l'engine déclenche workflow #4
-        //   (10 min après, demande à l'artisan : RDV pris / Devis / Perdu / À rappeler).
-        const { data: newLead } = await sb.from('agency_leads').insert({
+        const insertPayload = {
           client_id:        client.id,
           telephone:        fromPhone,
           source:           sourceFromMatch,
           statut:           'nouveau',
           appel_manque:     isMissed,
           appel_repondu_le: traite ? new Date().toISOString() : null,
-        }).select('id').single();
+        };
+        console.log('[voice-webhook] insert lead payload:', JSON.stringify(insertPayload));
+        const { data: newLead, error: insertErr } = await sb.from('agency_leads')
+          .insert(insertPayload)
+          .select('id')
+          .single();
+        if (insertErr) {
+          console.error('[voice-webhook] LEAD INSERT FAILED:', insertErr.message, insertErr);
+        } else {
+          console.log('[voice-webhook] lead created:', newLead?.id);
+        }
         leadId = newLead?.id || null;
       } else if (isMissed) {
         await sb.from('agency_leads').update({ appel_manque: true }).eq('id', leadId);
