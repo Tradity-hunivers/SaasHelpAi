@@ -75,8 +75,14 @@ Deno.serve(async (req: Request) => {
 
   // ─── PHASE B : status callback (DialCallStatus présent) ─────────────────────
   if (dialCallStatus) {
-    const isMissed = ['no-answer', 'busy', 'failed', 'canceled'].includes(dialCallStatus);
-    const traite   = dialCallStatus === 'completed';
+    // Heuristique : un appel "completed" qui dure moins de 10 secondes est
+    // presque certainement parti sur la messagerie vocale (voicemail) sans
+    // que l'artisan ait vraiment décroché. On le traite comme un appel manqué.
+    const effectiveDuration = dialDuration || callDuration || 0;
+    const voicemailLikely = dialCallStatus === 'completed' && effectiveDuration > 0 && effectiveDuration < 10;
+    const isMissed = ['no-answer', 'busy', 'failed', 'canceled'].includes(dialCallStatus) || voicemailLikely;
+    const traite   = dialCallStatus === 'completed' && !voicemailLikely;
+    console.log('[voice-webhook] dialCallStatus=' + dialCallStatus + ' duree=' + effectiveDuration + 's → isMissed=' + isMissed + ' traite=' + traite);
 
     let leadId: string | null = null;
     if (client?.id) {
@@ -164,7 +170,12 @@ Deno.serve(async (req: Request) => {
   const dialUrl = `${SUPABASE_URL}/functions/v1/agency-voice-webhook`;
   // callerId="${fromPhone}" : présente le vrai numéro du prospect à l'artisan,
   //    pas le numéro Twilio. Permet à l'artisan de voir qui appelle.
-  // timeout="20" : 20s de sonnerie avant de considérer no-answer
-  const xml = `<Dial timeout="20" callerId="${fromPhone}" action="${dialUrl}" method="POST"><Number>${client.telephone}</Number></Dial>`;
+  // timeout="15" : 15s de sonnerie avant de considérer no-answer (la plupart
+  //   des messageries vocales FR décrochent vers 25-30s, donc 15s laisse
+  //   une marge pour décrocher vraiment sans risquer le voicemail)
+  // answerOnBridge="true" : ne marque l'appel "completed" QUE quand le bridge
+  //   audio est vraiment établi (et non quand n'importe quel signal "answered"
+  //   est reçu — ce qui inclurait certains voicemails).
+  const xml = `<Dial timeout="15" callerId="${fromPhone}" action="${dialUrl}" method="POST" answerOnBridge="true"><Number>${client.telephone}</Number></Dial>`;
   return twiml(xml);
 });
