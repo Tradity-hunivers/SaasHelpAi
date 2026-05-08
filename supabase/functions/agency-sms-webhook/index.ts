@@ -15,9 +15,12 @@ const sb = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-const SID   = Deno.env.get('TWILIO_ACCOUNT_SID')!;
-const TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')!;
-const FROM  = Deno.env.get('TWILIO_PHONE_FROM')!;
+const SID         = Deno.env.get('TWILIO_ACCOUNT_SID')!;
+const TOKEN       = Deno.env.get('TWILIO_AUTH_TOKEN')!;
+const FROM        = Deno.env.get('TWILIO_PHONE_FROM')!;
+const WA_TOKEN    = Deno.env.get('WA_ACCESS_TOKEN') || '';
+const WA_PHONE_ID = Deno.env.get('WA_PHONE_NUMBER_ID') || '';
+const TG_TOKEN    = Deno.env.get('TELEGRAM_AGENCY_BOT_TOKEN') || Deno.env.get('TELEGRAM_BOT_TOKEN') || '';
 
 async function sendSms(from: string, to: string, body: string) {
   try {
@@ -37,8 +40,44 @@ async function sendSms(from: string, to: string, body: string) {
   } catch (e) { console.error('sendSms err', e); }
 }
 
+// ─── WhatsApp / Telegram dispatch vers l'artisan ────────────────────────────
+async function sendWaText(to: string, text: string) {
+  if (!WA_TOKEN || !WA_PHONE_ID) return false;
+  try {
+    const r = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body: text } }),
+    });
+    return r.ok;
+  } catch (e) { console.error('sendWaText err', e); return false; }
+}
+
+async function sendTelegramText(chatId: string, text: string) {
+  if (!TG_TOKEN) return false;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
+    });
+    return r.ok;
+  } catch (e) { console.error('sendTelegramText err', e); return false; }
+}
+
+async function notifyArtisan(client: any, body: string): Promise<boolean> {
+  const canal = (client?.canal_notif || 'whatsapp').toLowerCase();
+  let ok = false;
+  if ((canal === 'telegram' || canal === 'les_deux') && client?.telegram_chat_id && client?.telegram_actif) {
+    ok = await sendTelegramText(client.telegram_chat_id, body) || ok;
+  }
+  if ((canal === 'whatsapp' || canal === 'les_deux' || !canal) && client?.whatsapp_phone && client?.whatsapp_actif) {
+    ok = await sendWaText(client.whatsapp_phone, body) || ok;
+  }
+  return ok;
+}
+
 function twiml(body = '') {
-  // Réponse vide TwiML (Twilio 200 OK)
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, {
     headers: { 'Content-Type': 'application/xml' },
     status: 200,
@@ -49,14 +88,13 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return twiml();
 
   const form      = await req.formData();
-  const fromPhone = (form.get('From') || '').toString(); // numéro du prospect
-  const toPhone   = (form.get('To') || '').toString();   // numéro Twilio appelé (artisan)
+  const fromPhone = (form.get('From') || '').toString();
+  const toPhone   = (form.get('To') || '').toString();
   const body      = ((form.get('Body') || '').toString()).trim();
 
   if (!fromPhone || !body) return twiml();
 
-  // Identifier le client (artisan) qui possède toPhone (twilio_phone ou twilio_phone_ads).
-  // Sert au reply auto : on répond depuis le bon numéro pour conserver le thread chez le prospect.
+  // Identifier le client (artisan) qui possède toPhone
   let toFromForReply = FROM;
   if (toPhone) {
     const variants = [toPhone, toPhone.replace(/^\+/, ''), '+' + toPhone.replace(/^\+/, '')];
@@ -73,14 +111,13 @@ Deno.serve(async (req: Request) => {
   // Trouver le lead le plus récent avec ce téléphone
   const { data: lead } = await sb
     .from('agency_leads')
-    .select('*, agency_clients(id, nom, whatsapp_phone, telegram_chat_id, canal_notif, avis_google_url, agency_sites(avis_google_url))')
+    .select('*, agency_clients(id, nom, whatsapp_phone, whatsapp_actif, telegram_chat_id, telegram_actif, canal_notif, avis_google_url, agency_sites(avis_google_url))')
     .eq('telephone', fromPhone)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (!lead) {
-    // Aucun lead : si STOP, on logue rien — sinon on ignore
     return twiml();
   }
 
@@ -89,6 +126,7 @@ Deno.serve(async (req: Request) => {
   const c        = lead.agency_clients as any;
   const lower    = body.toLowerCase();
   const etape    = lead.sms_etape || 0;
+  const nom      = lead.nom || 'Anonyme';
 
   // Logger inbound
   await sb.from('agency_lead_conversations').insert({
@@ -129,21 +167,39 @@ Deno.serve(async (req: Request) => {
     return twiml();
   }
 
-  // Étape 3 : urgence + qualification finale
+  // Étape 3 : urgence + qualification finale + NOTIF ARTISAN
   if (etape === 3) {
     let urgence = 'moyen';
     if (body === '1' || lower.includes('urgent')) urgence = 'urgent';
     if (body === '3' || lower.includes('futur'))  urgence = 'futur';
     const priorite = (lead.proprietaire === 'proprietaire' && urgence === 'urgent') ? 'haute' : 'normale';
-    await sb.from('agency_leads').update({
+    const { data: updLead } = await sb.from('agency_leads').update({
       urgence,
       sms_etape: 0,
       qualifie:  true,
       statut:    'qualifie',
       priorite,
-    }).eq('id', leadId);
+    }).eq('id', leadId).select().single();
     await sendSms(toFromForReply, fromPhone, "Merci pour ces informations. Nous revenons vers vous très rapidement !");
-    // La notif artisan (WA/Telegram selon canal_notif) est gérée par l'engine ou agency-notify
+
+    // Notif artisan via WA / Telegram avec récap du lead qualifié
+    if (updLead) {
+      const isPrioritaire = updLead.priorite === 'haute';
+      const emoji         = isPrioritaire ? '🔴' : '🟡';
+      const urgLabel      = ({ urgent: 'Urgent < 7j', moyen: '15-30 jours', futur: 'Projet futur' } as any)[urgence] || urgence;
+      const srcLabel      = ({ site: 'Site web', google_ads: 'Google Ads', meta: 'Meta Ads', appel: 'Appel', lsa: 'LSA', gmb: 'GMB', autre: 'Autre' } as any)[lead.source] || lead.source || '?';
+
+      const msgArtisan = `${emoji} *${isPrioritaire ? 'Nouveau lead PRIORITAIRE' : 'Nouveau lead qualifié'}*
+
+👤 ${nom}
+📞 ${fromPhone}
+🏠 ${lead.proprietaire === 'proprietaire' ? 'Propriétaire' : 'Locataire'}
+🔧 Besoin : ${updLead.prestation || lead.prestation || '—'}
+⏰ Urgence : ${urgLabel}
+📍 Source : ${srcLabel}${isPrioritaire ? '\n\n⚠️ À rappeler rapidement !' : ''}`;
+
+      await notifyArtisan(c, msgArtisan);
+    }
     return twiml();
   }
 
@@ -151,6 +207,8 @@ Deno.serve(async (req: Request) => {
   if (lower === 'oui' && lead.rdv_datetime && !lead.rdv_confirme) {
     await sb.from('agency_leads').update({ rdv_confirme: true }).eq('id', leadId);
     await sendSms(toFromForReply, fromPhone, "Parfait, à tout à l'heure !");
+    // Notif artisan : confirmation RDV
+    await notifyArtisan(c, `✅ ${nom} a confirmé le RDV de tout à l'heure.`);
     return twiml();
   }
 
@@ -165,16 +223,18 @@ Deno.serve(async (req: Request) => {
           ? `Merci beaucoup ! Votre avis nous aiderait énormément :\n${url}`
           : "Merci beaucoup, votre satisfaction est notre priorité !";
         await sendSms(toFromForReply, fromPhone, msg);
+        await notifyArtisan(c, `⭐ ${nom} a noté ${note}/5. Lien d'avis Google envoyé.`);
       } else {
         await sendSms(toFromForReply, fromPhone, "Merci pour votre retour. Nous revenons vers vous rapidement.");
-        // TODO : notifier l'artisan (alerte client insatisfait) via canal_notif
+        await notifyArtisan(c, `⚠️ *Client insatisfait !*\n${nom} a donné une note de *${note}/5*.\nÀ recontacter rapidement.`);
       }
       return twiml();
     }
   }
 
-  // Réponse libre du prospect après qualification : transmettre à l'artisan
-  // (à intégrer dans une étape ultérieure via dispatcher agency-notify)
-
+  // ─── Réponse libre du prospect (hors qualification / RDV / satisfaction) ───
+  // → on forward intégralement le message à l'artisan via son canal de notif.
+  // L'artisan voit la conversation continuer en "live" sur son WA/Telegram.
+  await notifyArtisan(c, `💬 *Message de ${nom}* (${fromPhone})\n\n"${body}"`);
   return twiml();
 });
